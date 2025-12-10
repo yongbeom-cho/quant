@@ -16,187 +16,76 @@ pd.options.display.max_rows = None
 def isNotDataframeOrEmpty(df):
     return not isinstance(df, pd.core.frame.DataFrame) or (isinstance(df, pd.core.frame.DataFrame) and df.empty)
 
-def interval_to_timedelta(interval: str) -> datetime.timedelta:
-    """Convert interval string to timedelta."""
-    if interval == "minute1":
-        return datetime.timedelta(minutes=1)
-    elif interval == "minute3":
-        return datetime.timedelta(minutes=3)
-    elif interval == "minute5":
-        return datetime.timedelta(minutes=5)
-    elif interval == "minute10":
-        return datetime.timedelta(minutes=10)
-    elif interval == "minute15":
-        return datetime.timedelta(minutes=15)
-    elif interval == "minute30":
-        return datetime.timedelta(minutes=30)
-    elif interval == "minute60":
-        return datetime.timedelta(hours=1)
-    elif interval == "minute240":
-        return datetime.timedelta(hours=4)
-    elif interval == "day":
-        return datetime.timedelta(days=1)
-    elif interval == "week":
-        return datetime.timedelta(weeks=1)
-    elif interval == "month":
-        return datetime.timedelta(days=30)  # approximate
-    else:
-        raise ValueError(f"Unknown interval: {interval}")
 
-def find_and_fill_gaps(df: pd.DataFrame, code: str, interval: str, expected_delta: datetime.timedelta) -> pd.DataFrame:
-    """Find gaps in data and fill them by fetching missing data."""
-    if isNotDataframeOrEmpty(df) or len(df) < 2:
-        return df
-    
-    df_sorted = df.sort_index()
-    total_gaps_filled = 0
-    max_gap_iterations = 2  # prevent infinite loops
-    
-    for iteration in range(max_gap_iterations):
-        print("find_and_fill_gaps iteration : %d" %(iteration))
-        gaps_found = []
-        
-        # Find all gaps using vectorized operations
-        if len(df_sorted) < 2:
-            break
-        
-        # Calculate time differences between consecutive rows
-        time_diffs = df_sorted.index[1:] - df_sorted.index[:-1]
-        
-        # Find gaps larger than expected interval (with tolerance)
-        gap_mask = time_diffs > expected_delta * 1.5
-        
-        # Create list of (start, end) tuples for gaps
-        gap_starts = df_sorted.index[:-1][gap_mask]
-        gap_ends = df_sorted.index[1:][gap_mask]
-        gaps_found = list(zip(gap_starts, gap_ends))
-        
-        if not gaps_found:
-            break  # No more gaps
-        
-        # Fill gaps by fetching data for each gap
-        new_dfs = []
-        iteration_gaps_filled = 0
-        print("gaps_found count : %d" %(len(gaps_found)))
-        for gap_start, gap_end in gaps_found:
-            # Calculate how many records should be in this gap
-            expected_count = int((gap_end - gap_start) / expected_delta) - 1
-            if expected_count <= 0:
-                continue
-            
-            # Fetch data for the gap period (walk backward from gap_end)
-            gap_dfs = []
-            to_cursor = gap_end
-            gap_max_iter = min(100, expected_count // 200 + 2)  # reasonable limit
-            
-            for _ in range(gap_max_iter):
-                # 날짜까지만 전달
-                gap_to_str = to_cursor.strftime("%Y-%m-%d")
-                # 분봉의 경우 하루(1440분)를 커버하도록 count=1440 사용
-                if interval.startswith("minute"):
-                    gap_count = 1440
-                else:
-                    gap_count = 200
-
-                gap_df = pyupbit.get_ohlcv(code, interval=interval, count=gap_count, to=gap_to_str)
-                if isNotDataframeOrEmpty(gap_df):
-                    break
-                
-                # Filter to only include data within the gap
-                gap_df = gap_df[(gap_df.index > gap_start) & (gap_df.index < gap_end)]
-                if gap_df.empty:
-                    break
-                
-                gap_dfs.append(gap_df)
-                
-                # Move cursor backward by one interval from earliest_in_gap
-                earliest_in_gap = gap_df.index.min()
-                if earliest_in_gap <= gap_start:
-                    break
-
-                to_cursor = earliest_in_gap - expected_delta
-                time.sleep(0.11)  # throttle
-            
-            if gap_dfs:
-                gap_merged = pd.concat(gap_dfs)
-                gap_merged = gap_merged[(gap_merged.index > gap_start) & (gap_merged.index < gap_end)]
-                gap_merged = gap_merged.sort_index().drop_duplicates()
-                if not gap_merged.empty:
-                    new_dfs.append(gap_merged)
-                    iteration_gaps_filled += len(gap_merged)
-            
-            time.sleep(0.11)  # throttle between gaps
-        
-        # Merge new data with existing data
-        if new_dfs:
-            new_data = pd.concat(new_dfs)
-            new_data = new_data.sort_index().drop_duplicates()
-            df_sorted = pd.concat([df_sorted, new_data])
-            df_sorted = df_sorted.sort_index().drop_duplicates()
-            total_gaps_filled += iteration_gaps_filled
-        
-        if iteration_gaps_filled == 0:
-            break  # No progress made, stop
-        
-        print(f"  Gap fill iteration {iteration + 1}: Found {len(gaps_found)} gaps, filled {iteration_gaps_filled} records")
-    
-    if total_gaps_filled > 0:
-        print(f"  Total gaps filled: {total_gaps_filled} records")
-    
-    return df_sorted
-
-def fetch_coin_ohlcv(code: str, interval: str, start_dt=None, end_dt=None):
-    """
-    Fetch candles for a date window or all history.
-    - "all": start_dt is None, end_dt is today; walk backward until no data.
-    - specific date: fetch [start_dt, end_dt).
-    Cursor moves to the earliest timestamp returned each batch (no fixed step).
-    """
+def get_ohlcv(code: str, interval: str, count: int, to: str):
+    """Get OHLCV data with retry if data count is less than requested count."""
     dfs = []
-    to_cursor = end_dt if end_dt else datetime.datetime.now()
+    merged = None
+    max_retries = 3
+    
+    for retry in range(max_retries):
+        df = pyupbit.get_ohlcv(code, interval=interval, count=count, to=to).drop_duplicates()
+        time.sleep(0.11)
+        if isNotDataframeOrEmpty(df):
+            continue
+        dfs.append(df)
+        if len(dfs) == 1:
+            merged = df
+        elif len(dfs) > 1:
+            merged = pd.concat(dfs).sort_index().drop_duplicates()
+
+        if len(merged) == count:
+            break
+    
+    if not dfs:
+        return None
+    
+    # Merge all retry results
+    merged = pd.concat(dfs)
+    merged = merged.sort_index().drop_duplicates()
+    
+    return merged
+
+
+def fetch_coin_ohlcv(code: str, interval: str, str_start_dt=None, str_end_dt=None):
+    dfs = []
+    
+    str_end_dt = str_end_dt if str_end_dt else datetime.datetime.now().strftime("%Y-%m-%d")
+    to_cursor = str_end_dt
     max_iter = 100000  # safety guard
-    last_earliest = None
-    expected_delta = interval_to_timedelta(interval)
 
     for _ in range(max_iter):
         print("%s\t%s\t%d" %(code, interval, _))
-        # pyupbit 'to' 는 일 단위까지만 사용되는 것으로 보이므로 날짜만 전달
-        to_str = to_cursor.strftime("%Y-%m-%d")
-        # interval 이 분봉인 경우, 하루(1440분)를 커버하도록 count=1440 사용
         if interval.startswith("minute"):
             count = 1440
         else:
             count = 200
 
-        df = pyupbit.get_ohlcv(code, interval=interval, count=count, to=to_str)
+        df = get_ohlcv(code, interval=interval, count=count, to=to_cursor)
         if isNotDataframeOrEmpty(df):
             break
         # print(df.head())
         dfs.append(df)
 
-        earliest = df.index.min()
-        if start_dt and earliest <= start_dt:
+        str_earliest_date = df.index.min().strftime("%Y-%m-%d")
+
+        if str_start_dt and str_earliest_date <= str_start_dt:
             break
 
-        if last_earliest is not None and earliest >= last_earliest:
-            break
-        last_earliest = earliest
-
-        # 다음 페이지 요청용 to 는 현재 배치의 최소 인덱스에서 interval 만큼 뺀 값으로 설정
-        to_cursor = earliest - expected_delta
+        to_cursor = str_earliest_date
         time.sleep(0.11)  # throttle to avoid rate-limit
 
     if not dfs:
         return None
 
     merged = pd.concat(dfs)
-    if start_dt and end_dt:
+    if str_start_dt and str_end_dt:
+        start_dt = datetime.datetime.strptime(str_start_dt, "%Y-%m-%d") \
+                        .replace(hour=9, minute=0, second=0, microsecond=0)
+        end_dt = datetime.datetime.strptime(str_end_dt, "%Y-%m-%d") \
+                        .replace(hour=9, minute=0, second=0, microsecond=0)
         merged = merged[(merged.index >= start_dt) & (merged.index < end_dt)]
     merged = merged.sort_index().drop_duplicates()
-    
-    # Fill gaps in the data
-    expected_delta = interval_to_timedelta(interval)
-    merged = find_and_fill_gaps(merged, code, interval, expected_delta)
     
     return merged
 
@@ -274,14 +163,15 @@ if args.interval not in ALLOWED_INTERVALS:
 
 interval = args.interval
 
-# get start and end date (for "all", start_dt=None, end_dt=today)
+str_start_dt = None
+str_end_dt = None
 if args.date.lower() == "all":
-    start_dt = None
-    end_dt = datetime.datetime.now()
+    str_end_dt = datetime.datetime.now().strftime("%Y-%m-%d")
 else:
+    # args.date에 어제의 날짜가 들어옴.
     date = datetime.datetime.strptime(args.date, "%Y%m%d")
-    start_dt = datetime.datetime(date.year, date.month, date.day)
-    end_dt = start_dt + datetime.timedelta(days=1)
+    str_start_dt = datetime.datetime(date.year, date.month, date.day).strftime("%Y-%m-%d")
+    str_end_dt = (start_dt + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
 
 
 if args.market == 'coin':
@@ -297,7 +187,7 @@ if args.market == 'coin':
     for ticker_i, ticker in enumerate(tickers):
         print(f"start {ticker_i+1}. {ticker}")
         try:
-            df = fetch_coin_ohlcv(ticker, interval, start_dt, end_dt)
+            df = fetch_coin_ohlcv(ticker, interval, str_start_dt, str_end_dt)
             if isNotDataframeOrEmpty(df):
                 print(f"{ticker} - no data")
                 continue
