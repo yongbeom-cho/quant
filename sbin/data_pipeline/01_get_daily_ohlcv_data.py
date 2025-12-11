@@ -141,7 +141,7 @@ def create_table_if_not_exists(conn: sqlite3.Connection, table_name: str):
 #--date : {YYYYMMDD or "all"}
 #--output_dir : {output_dir for db file}
 parser = argparse.ArgumentParser(description='get_daily_ohlcv_data')
-parser.add_argument('--root_dir', type=str, default="/Users/yongbeom/project/coin_volume_trader")
+parser.add_argument('--root_dir', type=str, default="/Users/yongbeom/cyb/project/2025/quant")
 parser.add_argument('--date', type=str, required=True, help="YYYYMMDD or all")
 parser.add_argument('--market', type=str, default="coin")
 parser.add_argument('--interval', type=str, default="minute1")
@@ -172,7 +172,7 @@ else:
     # args.date에 어제의 날짜가 들어옴.
     date = datetime.datetime.strptime(args.date, "%Y%m%d")
     str_start_dt = datetime.datetime(date.year, date.month, date.day).strftime("%Y-%m-%d")
-    str_end_dt = (start_dt + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    str_end_dt = (date + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
 
 
 if args.market == 'coin':
