@@ -62,6 +62,7 @@ def fetch_coin_ohlcv(code: str, interval: str, str_start_dt=None, str_end_dt=Non
     for _ in range(max_iter):
         print("%s\t%s\t%d" %(code, interval, _))
         df = get_ohlcv(code, interval=interval, count=count, to=to_cursor)
+        
         if isNotDataframeOrEmpty(df):
             print(code, interval, count, to_cursor)
             sys.exit()

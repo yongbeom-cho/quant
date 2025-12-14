@@ -157,8 +157,8 @@ if __name__ == "__main__":
                 params_n_lose = sum(v[1] for v in ticker_win_loses.values())
                 params_win_ratio = params_n_win/float(params_n_win+params_n_lose) if params_n_win + params_n_lose > 0 else 0.0
                 buy_str_params, sell_str_params = dic_str_params.split('-')
-                print(buy_str_params)
-                print(sell_str_params)
+                # print(buy_str_params)
+                # print(sell_str_params)
                 buy_params = ast.literal_eval(buy_str_params)
                 sell_params = ast.literal_eval(sell_str_params)
                 # buy_params = json.loads(buy_str_params)
