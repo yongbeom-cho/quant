@@ -107,6 +107,8 @@ parser.add_argument('--root_dir', type=str, default="/Users/yongbeom/cyb/project
 parser.add_argument('--market', type=str, default="coin")
 parser.add_argument('--interval', type=str, default="minute1")
 parser.add_argument('--target_ticker', type=str, default="all") #KRW-BTC
+parser.add_argument('--target_strategy', type=str, default="all") #explode_volume_breakout
+
 args = parser.parse_args()
 
 if __name__ == "__main__":
@@ -115,6 +117,7 @@ if __name__ == "__main__":
     strategy_config_path = os.path.join(args.root_dir, 'sbin/strategy/config.json')
     with open(strategy_config_path, 'r', encoding='utf-8') as f:
         strategy_config_list = json.load(f)
+    
     tickers = get_tickers(db_path, table_name)
     if args.target_ticker != 'all':
         if args.target_ticker in tickers:
@@ -122,6 +125,8 @@ if __name__ == "__main__":
     
     for strategy_config in strategy_config_list:
         strategy_name = strategy_config['strategy_name']
+        if args.target_strategy != 'all' and args.target_strategy != strategy_name:
+            continue
         buy_params_list = get_strategy_params_list(strategy_name, strategy_config['buy_signal_config'])
         sell_params_list = get_sell_strategy_params_list(strategy_name, strategy_config['sell_signal_config'])
         params_win_loses = {}
