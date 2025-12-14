@@ -155,6 +155,12 @@ if __name__ == "__main__":
                 params_n_win = sum(v[0] for v in ticker_win_loses.values())
                 params_n_lose = sum(v[1] for v in ticker_win_loses.values())
                 params_win_ratio = params_n_win/float(params_n_win+params_n_lose) if params_n_win + params_n_lose > 0 else 0.0
+                buy_str_params, sell_str_params = dic_str_params.split('-')
+                buy_params = json.loads(buy_str_params)
+                sell_params = json.loads(sell_str_params)
+                low_limit_ratio = sell_params['low_limit_ratio']
+                high_limit_ratio = sell_params['high_limit_ratio']
+                rrr = (high_limit_ratio-1.0) / (1.0-low_limit_ratio)
                 print("%s  -  win count : %d, loss count : %d, win_ratio : %.2f, risk-reward-ratio : %.1f" %(dic_str_params, params_n_win, params_n_lose, params_win_ratio, rrr))
                 params_win_loses[dic_str_params] = (params_n_win, params_n_lose)
                 params_expected_returns[dic_str_params] = (params_win_ratio*rrr) - (1-params_win_ratio)

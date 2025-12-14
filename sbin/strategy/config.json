@@ -2,29 +2,59 @@
     {
         "strategy_name": "explode_volume_breakout",
         "buy_signal_config": {
-            "window_list": [60],
-            "prev_top_vol_del_ratio_list": [0.1, 0.0],
-            "vol_ratio_list": [100, 75],
-            "co_ratio_list": [1.02, 1.03],
-            "utr_list": [0.9, 0.8]
+            "window_list": [120, 240],
+            "prev_top_vol_del_ratio_list": [0.0, 0.1],
+            "vol_ratio_list": [100, 150],
+            "co_ratio_list": [1.015, 1.02, 1.025],
+            "utr_list": [0.9, 0.95]
         },
         "sell_signal_config": {
-            "low_limit_ratio_list": [0.98],
-            "high_limit_ratio_list": [1.03, 1.04, 1.05, 1.06]
+            "low_limit_ratio_list": [0.99, 0.98, 0.97],
+            "high_limit_ratio_list": [1.02, 1.03, 1.04, 1.05, 1.06]
         }
     },
     {
         "strategy_name": "explode_volume_volatility_breakout",
         "buy_signal_config": {
-            "window_list": [60, 120],
-            "prev_top_vol_del_ratio_list": [0.1, 0.0],
-            "vol_ratio_list": [100, 75],
-            "k_list": [1.5, 2.5, 3.5],
-            "utr_list": [0.9, 0.8]
+            "window_list": [120, 240],
+            "prev_top_vol_del_ratio_list": [0.0, 0.1],
+            "vol_ratio_list": [100, 150],
+            "k_list": [3.0, 4.0, 5.0],
+            "utr_list": [0.9, 0.95]
         },
         "sell_signal_config": {
-            "low_limit_ratio_list": [0.98],
-            "high_limit_ratio_list": [1.03, 1.04, 1.05, 1.06]
+            "low_limit_ratio_list": [0.99, 0.98, 0.97],
+            "high_limit_ratio_list": [1.02, 1.03, 1.04, 1.05, 1.06]
+        }
+    },
+    {
+        "strategy_name": "explode_volume_breakout_2",
+        "buy_signal_config": {
+            "window_list": [120, 240],
+            "vol_ratio_list": [100, 150],
+            "short_window_list": [2, 5],
+            "short_vol_ratio_list": [50, 80],
+            "co_ratio_list": [1.015, 1.02, 1.025],
+            "utr_list": [0.9, 0.95]
+        },
+        "sell_signal_config": {
+            "low_limit_ratio_list": [0.98, 0.97, 0.96],
+            "high_limit_ratio_list": [1.02, 1.03, 1.04, 1.05, 1.06]
+        }
+    },
+    {
+        "strategy_name": "explode_volume_volatility_breakout_2",
+        "buy_signal_config": {
+            "window_list": [120, 240],
+            "vol_ratio_list": [100, 150],
+            "short_window_list": [2, 5],
+            "short_vol_ratio_list": [50, 80],
+            "k_list": [3.0, 4.0, 5.0],
+            "utr_list": [0.9, 0.95]
+        },
+        "sell_signal_config": {
+            "low_limit_ratio_list": [0.98, 0.97, 0.96],
+            "high_limit_ratio_list": [1.02, 1.03, 1.04, 1.05, 1.06]
         }
     }
 ]
