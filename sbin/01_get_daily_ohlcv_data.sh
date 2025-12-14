@@ -22,8 +22,8 @@ fi
 
 market=coin
 output_dir="${root_dir}/var/data"
-interval=minute1
-python ${root_dir}/sbin/data_pipeline/01_get_daily_ohlcv_data.py --root_dir ${root_dir} --date ${date_arg} --market ${market} --interval ${interval} --output_dir ${output_dir}
-#for interval in minute1 minute3 minute5 minute10 minute15 minute30 minute60 minute240 week month day; do
-#    python ${root_dir}/sbin/data_pipeline/01_get_daily_ohlcv_data.py --root_dir ${root_dir} --date ${date_arg} --market ${market} --interval ${interval} --output_dir ${output_dir}
-#done
+#interval=minute1
+#python ${root_dir}/sbin/data_pipeline/01_get_daily_ohlcv_data.py --root_dir ${root_dir} --date ${date_arg} --market ${market} --interval ${interval} --output_dir ${output_dir}
+for interval in minute1 minute3 minute5 minute10 minute15 minute30 minute60 minute240 week month day; do
+    python ${root_dir}/sbin/data_pipeline/01_get_daily_ohlcv_data.py --root_dir ${root_dir} --date ${date_arg} --market ${market} --interval ${interval} --output_dir ${output_dir}
+done

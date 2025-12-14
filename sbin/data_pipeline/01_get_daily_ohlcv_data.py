@@ -182,8 +182,6 @@ else:
 
 if args.market == 'coin':
     tickers = [t for t in pyupbit.get_tickers() if 'KRW-' in t]
-    # tickers = ["KRW-BTC"]
-    tickers = ["KRW-BEAM"]
     print("tickers len :", len(tickers))
     
     # Table name: {market}_ohlcv_{interval}
