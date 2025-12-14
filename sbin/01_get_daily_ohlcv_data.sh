@@ -16,8 +16,8 @@ if [ -z "$root_dir" ]; then
 fi
 
 if [ -z "$date_arg" ]; then
-    #date_arg=$(date -v-1d +%Y%m%d)
-    date_arg=all
+    date_arg=$(date -v-1d +%Y%m%d)
+    # date_arg=all
 fi
 
 market=coin
