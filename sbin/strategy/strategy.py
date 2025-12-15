@@ -9,11 +9,13 @@ def apply_strategy(df, strategy_name, params):
     elif strategy_name == 'explode_volume_volatility_breakout':
         return explode_volume_volatility_breakout(df, params['window'], params['prev_top_vol_del_ratio'], params['vol_ratio'], params['k'], params['utr'])
     elif strategy_name == 'explode_volume_breakout_2':
-        return explode_volume_breakout_2(df, params['window'], params['vol_ratio'], params['short_window'], params['short_vol_ratio'], params['k'], params['utr'])
+        return explode_volume_breakout_2(df, params['window'], params['vol_ratio'], params['short_window'], params['short_vol_ratio'], params['co_ratio'], params['utr'])
     elif strategy_name == 'explode_volume_volatility_breakout_2':
         return explode_volume_volatility_breakout_2(df, params['window'], params['vol_ratio'], params['short_window'], params['short_vol_ratio'], params['k'], params['utr'])
     elif strategy_name == 'low_bb_du':
         return low_bb_du(df, params['window'], params['close_band_ratio_lower'], params['ol_hl_ratio_upper'], params['close_open_ratio_upper'], params['over_sell_threshold'])
+    elif strategy_name == 'larry_williams_vb':
+        return larry_williams_vb(df, params['k'])
     else:
         return None
 
@@ -51,6 +53,7 @@ def get_sell_strategy_params_list(strategy_name, config):
 
     arg_names = [name[:-5] for name in config.keys()]
 
+
     # config에서 param 값 읽기
     param_values = []
     for name in arg_names:
@@ -70,6 +73,18 @@ def volatility_breakout_prev_candle(df, k=0.5):
     df["range"] = df["high"] - df["low"]
     df["bo_tp"] = df["open"] + df["range"].shift(1) * k 
     df["signal"] = df["close"] > df["bo_tp"]
+    return df
+
+def larry_williams_vb(df, k):
+    """
+    래리 윌리엄스 변동성 돌파 전략
+    - range: 이전 봉의 (고가 - 저가)
+    - entry_target: 현재 봉의 시가 + (이전 봉의 range * k)
+    - signal: 현재 봉의 종가가 entry_target 보다 높으면 True
+    """
+    df['range'] = df['high'].shift(1) - df['low'].shift(1)
+    df['entry_target'] = df['open'] + df['range'] * k
+    df['signal'] = df['close'] > df['entry_target']
     return df
 
 def trimmed_mean(x, prev_top_vol_del_ratio):
@@ -220,5 +235,6 @@ STRATEGY_REGISTRY = {
     "explode_volume_volatility_breakout": explode_volume_volatility_breakout,
     "explode_volume_breakout_2": explode_volume_breakout_2,
     "explode_volume_volatility_breakout_2": explode_volume_volatility_breakout_2,
-    "low_bb_du": low_bb_du
+    "low_bb_du": low_bb_du,
+    "larry_williams_vb": larry_williams_vb
 }
