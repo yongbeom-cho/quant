@@ -1,0 +1,13 @@
+[
+    {
+        "strategy_name": "larry_williams_vb",
+        "buy_signal_config": {
+            "k_list": [0.4, 0.5, 0.6]
+        },
+        "sell_signal_config": {
+            "stop_loss_pct_list": [0.01, 0.02, 0.03],
+            "profit_target_pct_list": [0.02, 0.03, 0.04, 0.05],
+            "hold_period_candles_list": [6, 12]
+        }
+    }
+]
