@@ -16,6 +16,8 @@ def apply_strategy(df, strategy_name, params):
         return low_bb_du(df, params['window'], params['close_band_ratio_lower'], params['ol_hl_ratio_upper'], params['close_open_ratio_upper'], params['over_sell_threshold'])
     elif strategy_name == 'larry_williams_vb':
         return larry_williams_vb(df, params['k'])
+    elif strategy_name == 'larry_williams_vb_pro':
+        return larry_williams_vb_pro(df, params['k'], params['ma_window'], params['dip_ma_window'])
     else:
         return None
 
@@ -86,6 +88,34 @@ def larry_williams_vb(df, k):
     df['entry_target'] = df['open'] + df['range'] * k
     df['signal'] = df['close'] > df['entry_target']
     return df
+
+def larry_williams_vb_pro(df, k, ma_window, dip_ma_window):
+    """
+    Larry Williams Volatility Breakout Pro
+    - 진입 조건1 (돌파): 상승 추세(MA) + 변동성 돌파
+    - 진입 조건2 (추가매수/딥매수): 상승 추세(MA) + 단기 이평선 터치
+    - 익절/손절: 백테스터에서 처리
+    """
+    # 기본 변동성 돌파 계산
+    df['range'] = df['high'].shift(1) - df['low'].shift(1)
+    df['entry_target'] = df['open'] + df['range'] * k
+
+    # 추세 필터 (장기 이동평균)
+    df['ma_long'] = talib.SMA(df['close'], timeperiod=ma_window)
+    is_uptrend = df['close'] > df['ma_long']
+
+    # 조건 1: 변동성 돌파 신호
+    breakout_signal = (df['close'] > df['entry_target']) & is_uptrend
+
+    # 조건 2: 딥매수 신호 (단기 이동평균)
+    df['ma_dip'] = talib.SMA(df['close'], timeperiod=dip_ma_window)
+    dip_buy_signal = (df['low'] < df['ma_dip']) & (df['close'] > df['ma_dip']) & is_uptrend
+    
+    # 최종 신호: 돌파 또는 딥매수
+    df['signal'] = breakout_signal | dip_buy_signal
+    
+    return df
+
 
 def trimmed_mean(x, prev_top_vol_del_ratio):
     n = len(x)
@@ -236,5 +266,6 @@ STRATEGY_REGISTRY = {
     "explode_volume_breakout_2": explode_volume_breakout_2,
     "explode_volume_volatility_breakout_2": explode_volume_volatility_breakout_2,
     "low_bb_du": low_bb_du,
-    "larry_williams_vb": larry_williams_vb
+    "larry_williams_vb": larry_williams_vb,
+    "larry_williams_vb_pro": larry_williams_vb_pro
 }

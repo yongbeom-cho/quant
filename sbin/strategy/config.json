@@ -81,5 +81,19 @@
             "high_limit_ratio_list": [1.02, 1.03, 1.04, 1.05],
             "hold_period_candles_list": [6, 12]
         }
+    },
+    {
+        "strategy_name": "larry_williams_vb_2",
+        "buy_signal_config": {
+            "k_list": [0.4, 0.5, 0.6],
+            "ma_window_list": [20],
+            "dip_ma_window_list": [5, 10]
+        },
+        "sell_signal_config": {
+            "profit_cut_rate_list": [1.02, 1.03, 1.04, 1.05],
+            "loss_cut_rate_list": [0.99, 0.98, 0.97],
+            "high_limit_ratio_list": [1.02, 1.03, 1.04, 1.05],
+            "low_limit_ratio_list": [0.99, 0.98, 0.97]
+        }
     }
 ]
