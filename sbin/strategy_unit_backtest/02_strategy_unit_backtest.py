@@ -235,7 +235,11 @@ if __name__ == "__main__":
                     params_total_rors[str_params] = total_ror
 
         
-        expected_return_mean = sum(v for v in params_expected_returns.values() if v is not None) / len(params_expected_returns) if params_expected_returns else 0.0
+        valid_returns = [v for v in params_expected_returns.values() if v is not None]
+        if valid_returns:
+            expected_return_mean = sum(valid_returns) / len(valid_returns)
+        else:
+            expected_return_mean = 0.0
         print("### STRATEGY_RESULT START ###")
         print("%s" %(strategy_name))
         print("%s\t%.2f" %(strategy_name, expected_return_mean))
