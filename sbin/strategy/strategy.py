@@ -16,8 +16,8 @@ def apply_strategy(df, strategy_name, params):
         return low_bb_du(df, params['window'], params['close_band_ratio_lower'], params['ol_hl_ratio_upper'], params['close_open_ratio_upper'], params['over_sell_threshold'])
     elif strategy_name == 'larry_williams_vb':
         return larry_williams_vb(df, params['k'])
-    elif strategy_name == 'larry_williams_vb_pro':
-        return larry_williams_vb_pro(df, params['k'], params['ma_window'], params['dip_ma_window'])
+    elif strategy_name == 'larry_williams_vb_2':
+        return larry_williams_vb_2(df, params['k'], params['ma_window'], params['dip_ma_window'])
     else:
         return None
 
@@ -89,9 +89,9 @@ def larry_williams_vb(df, k):
     df['signal'] = df['close'] > df['entry_target']
     return df
 
-def larry_williams_vb_pro(df, k, ma_window, dip_ma_window):
+def larry_williams_vb_2(df, k, ma_window, dip_ma_window):
     """
-    Larry Williams Volatility Breakout Pro
+    Larry Williams Volatility Breakout 2
     - 진입 조건1 (돌파): 상승 추세(MA) + 변동성 돌파
     - 진입 조건2 (추가매수/딥매수): 상승 추세(MA) + 단기 이평선 터치
     - 익절/손절: 백테스터에서 처리
@@ -267,5 +267,5 @@ STRATEGY_REGISTRY = {
     "explode_volume_volatility_breakout_2": explode_volume_volatility_breakout_2,
     "low_bb_du": low_bb_du,
     "larry_williams_vb": larry_williams_vb,
-    "larry_williams_vb_pro": larry_williams_vb_pro
+    "larry_williams_vb_2": larry_williams_vb_2
 }
