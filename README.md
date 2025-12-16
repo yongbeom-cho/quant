@@ -14,7 +14,8 @@ sbin/01_get_daily_ohlcv_data.sh
 unit_backtest
 sbin/02_strategy_unit_backtest.sh
 - 추가해야할 기능
-  1. 특정 coin만 unit test
-  2. 특정 strategy만 unit test
-  3. 특정 interval unit test
+  1. 특정 coin만 unit test - 완료
+  2. 특정 strategy만 unit test - 완료
+  3. 특정 interval unit test - 완료
   4. buy_signal 있는 지점에서(왼쪽 180, 오른쪽 60개 캔들정도) chart view 기능
+  5. sell_strategy
