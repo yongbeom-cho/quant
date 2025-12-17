@@ -61,29 +61,60 @@
         "strategy_name": "low_bb_du",
         "buy_signal_config": {
             "window_list": [1, 2, 3, 4],
-            "close_band_ratio_lower_list": [0.5, 0.4, 0.3, 0.2, 0.1],
-            "ol_hl_ratio_upper_list": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5],
+            "close_band_ratio_lower_list": [0.5, 0.35, 0.2],
+            "ol_hl_ratio_upper_list": [0.0, 0.15, 0.3, 0.45],
             "close_open_ratio_upper_list": [1.00, 1.0025, 1.005, 1.0075, 1.01],
             "over_sell_threshold_list": [20, 25, 30]
         },
         "sell_signal_config": {
-            "low_limit_ratio_list": [0.975, 0.95, 0.925, 0.9],
-            "high_limit_ratio_list": [1.025, 1.05, 1.075, 1.1, 1.125, 1.15, 1.175, 1.2]
+            "low_limit_ratio_list": [0.95, 0.9],
+            "high_limit_ratio_list": [1.026, 1.053, 1.112, 1.168, 1.224]
         }
     },
     {
         "strategy_name": "low_bb_du_2",
         "buy_signal_config": {
-            "window_list": [4,5,6],
-            "co_ratio_range_list":[[1.00,1.1],[1.00,1.07],[1.00,1.04],[1.0025,1.1],[1.0025,1.07],[1.0025,1.04],[1.005,1.1],[1.005,1.07],[1.005,1.04],[1.0075,1.1],[1.0075,1.07],[1.0075,1.04],[1.01,1.1],[1.01,1.07],[1.01,1.04],[1.02,1.04],[1.02,1.07],[1.02,1.1]],
-            "over_sell_threshold_list": [25, 30, 20],
-            "cwlc_ratio_lower_list": [1.05, 1.075, 1.1, 1.125, 1.15],
-            "lc_ratio_lower_list": [1.0, 0.99, 0.98],
-            "close_band_ratio_lower_list": [0.5, 0.35, 0.2]
+            "window_list": [1,2,3,4,5],
+            "co_ratio_range_list":[[1.00,1.07],[1.005,1.07],[1.01,1.07],[1.005,1.035],[1.00,1.035]],
+            "over_sell_threshold_list": [25, 31, 19],
+            "cwlc_ratio_lower_list": [1.06, 1.12],
+            "lo_ratio_lower_list": [0.99, 0.98],
+            "close_band_ratio_lower_list": [0.4, 0.2],
+            "cond3_idx_list": [0,1,2,3,4,5,6,7,8]
         },
         "sell_signal_config": {
-            "low_limit_ratio_list": [0.975, 0.95, 0.925, 0.9],
-            "high_limit_ratio_list": [1.025, 1.05, 1.075, 1.1, 1.125, 1.15, 1.175, 1.2]
+            "low_limit_ratio_list": [0.95, 0.975, 0.9],
+            "high_limit_ratio_list": [1.026, 1.055, 1.11, 1.165, 1.22]
+        }
+    },
+    {
+        "strategy_name": "low_bb_du_3",
+        "buy_signal_config": {
+            "window_list": [1, 2, 3, 4],
+            "close_band_ratio_lower_list": [0.5, 0.35, 0.2],
+            "ol_hl_ratio_upper_list": [0.0, 0.15, 0.3, 0.45],
+            "close_open_ratio_upper_list": [1.00, 1.0025, 1.005, 1.0075, 1.01],
+            "over_sell_threshold_list": [20, 25, 30]
+        },
+        "sell_signal_config": {
+            "low_limit_ratio_list": [0.95, 0.9],
+            "high_limit_ratio_list": [1.026, 1.053, 1.112, 1.168, 1.224]
+        }
+    },
+    {
+        "strategy_name": "low_bb_du_4",
+        "buy_signal_config": {
+            "window_list": [1,2,3,4,5],
+            "co_ratio_range_list":[[1.00,1.07],[1.005,1.07],[1.01,1.07],[1.005,1.035],[1.00,1.035]],
+            "over_sell_threshold_list": [25, 31, 19],
+            "cwlc_ratio_lower_list": [1.06, 1.12],
+            "lo_ratio_lower_list": [0.99, 0.98],
+            "close_band_ratio_lower_list": [0.4, 0.2],
+            "cond3_idx_list": [0,1,2,3,4,5,6,7,8]
+        },
+        "sell_signal_config": {
+            "low_limit_ratio_list": [0.95, 0.975, 0.9],
+            "high_limit_ratio_list": [1.026, 1.055, 1.11, 1.165, 1.22]
         }
     }
 ]

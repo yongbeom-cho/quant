@@ -15,7 +15,11 @@ def apply_strategy(df, strategy_name, params):
     elif strategy_name == 'low_bb_du':
         return low_bb_du(df, params['window'], params['close_band_ratio_lower'], params['ol_hl_ratio_upper'], params['close_open_ratio_upper'], params['over_sell_threshold'])
     elif strategy_name == 'low_bb_du_2':
-        return low_bb_du_2(df, params['window'], params['co_ratio_range'], params['over_sell_threshold'], params['cwlc_ratio_lower'], params['lc_ratio_lower'], params['close_band_ratio_lower'])
+        return low_bb_du_2(df, params['window'], params['co_ratio_range'], params['over_sell_threshold'], params['cwlc_ratio_lower'], params['lo_ratio_lower'], params['close_band_ratio_lower'], params['cond3_idx'])
+    elif strategy_name == 'low_bb_du_3':
+        return low_bb_du_3(df, params['window'], params['close_band_ratio_lower'], params['ol_hl_ratio_upper'], params['close_open_ratio_upper'], params['over_sell_threshold'])
+    elif strategy_name == 'low_bb_du_4':
+        return low_bb_du_4(df, params['window'], params['co_ratio_range'], params['over_sell_threshold'], params['cwlc_ratio_lower'], params['lo_ratio_lower'], params['close_band_ratio_lower'], params['cond3_idx'])
     else:
         return None
 
@@ -190,8 +194,55 @@ def low_bb_du(
         slowd_period=3,
         slowd_matype=0
     )
+    #예전..
+    # df['over_sell_golden_cross'] = (df['stoch_d'] > df['stoch_k']) & (df['stoch_d'].shift(1) < df['stoch_k'].shift(1)) & (df['stoch_k'] < over_sell_threshold)
+    #제대로gc
+    df['over_sell_golden_cross'] = (df['stoch_k'] > df['stoch_d']) & (df['stoch_d'].shift(1) > df['stoch_k'].shift(1)) & (df['stoch_k'] < over_sell_threshold)
 
+    df['bb_low_signal'] = False
+    for i in range(1, window+1):
+        df['bb_low_signal'] |= df['close'].shift(i) < df['bb_lower'].shift(i)
+
+    df['close_band_ratio_lower_signal'] = (((df['close'] - df['bb_lower']) / (df['bb_upper'] - df['bb_lower'])) < close_band_ratio_lower)
+    df['close_lb_up_signal'] = (df['close'] > df['bb_lower'])
+    df['ol_hl_ratio_upper_signal'] = (
+        (df['high'] != df['low']) &
+        (((df['open'] - df['low']) / (df['high'] - df['low'])) > ol_hl_ratio_upper)
+    )
+
+    df['close_open_ratio_upper_signal'] = df['close'] > df['open'] * close_open_ratio_upper
+
+    df['prev_signal'] = df['bb_low_signal'] & df['close_lb_up_signal'] & df['close_band_ratio_lower_signal'] & df['ol_hl_ratio_upper_signal'] & df['close_open_ratio_upper_signal'] & df['over_sell_golden_cross']
+    df['signal'] = df['prev_signal'] & ~(
+        df['prev_signal'].shift(1).rolling(window).max().fillna(0).astype(bool)
+    )
+    
+    return df
+
+def low_bb_du_3(
+    df,
+    window=2,
+    close_band_ratio_lower=0.2,
+    ol_hl_ratio_upper=0.3,
+    close_open_ratio_upper=1.005,
+    over_sell_threshold=20
+):
+    
+    df['bb_upper'], df['bb_mid'], df['bb_lower'] = talib.BBANDS(df['close'], timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
+    df['stoch_k'], df['stoch_d'] = talib.STOCH(
+        df['high'],
+        df['low'],
+        df['close'],
+        fastk_period=14,
+        slowk_period=3,
+        slowk_matype=0,
+        slowd_period=3,
+        slowd_matype=0
+    )
+    #예전..
     df['over_sell_golden_cross'] = (df['stoch_d'] > df['stoch_k']) & (df['stoch_d'].shift(1) < df['stoch_k'].shift(1)) & (df['stoch_k'] < over_sell_threshold)
+    #제대로gc
+    # df['over_sell_golden_cross'] = (df['stoch_k'] > df['stoch_d']) & (df['stoch_d'].shift(1) > df['stoch_k'].shift(1)) & (df['stoch_k'] < over_sell_threshold)
 
     df['bb_low_signal'] = False
     for i in range(1, window+1):
@@ -219,8 +270,88 @@ def low_bb_du_2(
     co_ratio_range=[1.00,1.03],
     over_sell_threshold=25,
     cwlc_ratio_lower=1.04, #close/window_low_close
-    lc_ratio_lower=0.998,
-    close_band_ratio_lower=0.3
+    lo_ratio_lower=0.998,
+    close_band_ratio_lower=0.3,
+    cond3_idx=0
+):
+    # condition
+    # 1. close/open < 1.03 & close/open >= 1.00 
+    # 2. close > bb_low
+    # 3. stochastic slow < 25
+    # 3-1. stochastic slow golden cross
+    # 4. 직전 4~5개봉 이내에 bb 아래로 떨어지는 봉 존재. (해당 close/open < 1.0)
+    # 5. 현재close / 직전 4~5개봉 이내에 최저 close < 1.04
+    # 6. 현재봉 꼬리 low/open < 0.998
+    # 7. 현재 close가 현재 band에서 하위 30%에 위치해있음
+    # 8. 직전 4~5개봉 이내에 (1~7) 만족하는게 없어야함.
+    
+    df['cond1'] = ((df['close'] / df['open']) >= co_ratio_range[0]) & ((df['close'] / df['open']) < co_ratio_range[1])
+
+    df['bb_upper'], df['bb_mid'], df['bb_lower'] = talib.BBANDS(df['close'], timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
+    df['cond2'] = df['close'] > df['bb_lower']
+
+    df['stoch_k'], df['stoch_d'] = talib.STOCH(
+        df['high'],
+        df['low'],
+        df['close'],
+        fastk_period=14,
+        slowk_period=3,
+        slowk_matype=0,
+        slowd_period=3,
+        slowd_matype=0
+    )
+    
+    # gc 제대로.
+    df['stoch_gc'] = ((df['stoch_d'] < df['stoch_k']) & (df['stoch_d'].shift(1) > df['stoch_k'].shift(1)))
+    
+    if cond3_idx == 0:
+        df['cond3'] = (df['stoch_k'] < over_sell_threshold) & (df['stoch_gc'])
+    elif cond3_idx == 1:
+        df['stoch_gc2'] = ((df['stoch_d'] < df['stoch_k']) & (df['stoch_d'].shift(2) > df['stoch_k'].shift(2)))
+        df['cond3'] = (df['stoch_k'] < over_sell_threshold) & ((df['stoch_gc'])|df['stoch_gc2'])
+    elif cond3_idx == 2:
+        df['cond3'] = (df['stoch_k'] < over_sell_threshold) & (df['stoch_gc'].rolling(window).max().fillna(False).astype(bool))
+    elif cond3_idx == 3:
+        df['cond3'] = (df['open'] < df['bb_lower'])
+    elif cond3_idx == 4:
+        df['cond3'] = (df['open'] < df['bb_lower']) & (df['stoch_k'] < over_sell_threshold)
+    elif cond3_idx == 5:
+        df['cond3'] = (df['open'] < df['bb_lower']) & (df['stoch_k'] < over_sell_threshold) & (df['stoch_gc'].rolling(window).max().fillna(False).astype(bool))
+    elif cond3_idx == 6:
+        df['cond3'] = (df['open'] < df['bb_lower']) & (df['stoch_k'] < over_sell_threshold) & (df['stoch_gc'])
+    elif cond3_idx == 7:
+        df['cond3'] = (df['stoch_k'] < over_sell_threshold) & (df['stoch_gc'].rolling(window).max().fillna(False).astype(bool))
+    else:
+        df['cond3'] = (df['stoch_k'] < over_sell_threshold)
+        
+
+    
+    cond4_raw = ((df['close'] < df['bb_lower']) & ((df['close'] / df['open']) < 1.0))
+    df['cond4'] = (cond4_raw.shift(1).rolling(window).max().fillna(False).astype(bool))
+
+    lowest_close_prev = (df['close'].shift(1).rolling(window).min())
+    df['cond5'] = (df['close'] / lowest_close_prev) < cwlc_ratio_lower
+
+    df['cond6'] = df['low'] / df['open'] < lo_ratio_lower
+    df['cond7'] = (((df['close'] - df['bb_lower']) / (df['bb_upper'] - df['bb_lower'])) < close_band_ratio_lower)
+
+    df['cond1-7'] = df['cond1'] & df['cond2'] & df['cond3'] & df['cond4'] & df['cond5'] & df['cond6'] & df['cond7']
+    
+    prev_true_exists = (df['cond1-7'].shift(1).rolling(window).max().fillna(False).astype(bool))
+    df['signal'] = df['cond1-7'] & (~prev_true_exists)
+
+    return df
+
+
+def low_bb_du_4(
+    df,
+    window=4,
+    co_ratio_range=[1.00,1.03],
+    over_sell_threshold=25,
+    cwlc_ratio_lower=1.04, #close/window_low_close
+    lo_ratio_lower=0.998,
+    close_band_ratio_lower=0.3,
+    cond3_idx=0
 ):
     # condition
     # 1. close/open < 1.03 & close/open >= 1.00 
@@ -249,10 +380,32 @@ def low_bb_du_2(
         slowd_matype=0
     )
 
+    # gc 거꾸로...
     df['stoch_gc'] = ((df['stoch_d'] > df['stoch_k']) & (df['stoch_d'].shift(1) < df['stoch_k'].shift(1)))
-    # df['cond3'] = (df['stoch_k'] < over_sell_threshold)
-    # df['cond3'] = (df['stoch_k'] < over_sell_threshold) & (df['stoch_gc'].rolling(2).max().fillna(False).astype(bool))
-    df['cond3'] = (df['stoch_k'] < over_sell_threshold) & (df['stoch_gc'])
+    
+    # gc 제대로.
+    # df['stoch_gc'] = ((df['stoch_d'] < df['stoch_k']) & (df['stoch_d'].shift(1) > df['stoch_k'].shift(1)))
+    
+    if cond3_idx == 0:
+        df['cond3'] = (df['stoch_k'] < over_sell_threshold) & (df['stoch_gc'])
+    elif cond3_idx == 1:
+        df['stoch_gc2'] = ((df['stoch_d'] < df['stoch_k']) & (df['stoch_d'].shift(2) > df['stoch_k'].shift(2)))
+        df['cond3'] = (df['stoch_k'] < over_sell_threshold) & ((df['stoch_gc'])|df['stoch_gc2'])
+    elif cond3_idx == 2:
+        df['cond3'] = (df['stoch_k'] < over_sell_threshold) & (df['stoch_gc'].rolling(window).max().fillna(False).astype(bool))
+    elif cond3_idx == 3:
+        df['cond3'] = (df['open'] < df['bb_lower'])
+    elif cond3_idx == 4:
+        df['cond3'] = (df['open'] < df['bb_lower']) & (df['stoch_k'] < over_sell_threshold)
+    elif cond3_idx == 5:
+        df['cond3'] = (df['open'] < df['bb_lower']) & (df['stoch_k'] < over_sell_threshold) & (df['stoch_gc'].rolling(window).max().fillna(False).astype(bool))
+    elif cond3_idx == 6:
+        df['cond3'] = (df['open'] < df['bb_lower']) & (df['stoch_k'] < over_sell_threshold) & (df['stoch_gc'])
+    elif cond3_idx == 7:
+        df['cond3'] = (df['stoch_k'] < over_sell_threshold) & (df['stoch_gc'].rolling(window).max().fillna(False).astype(bool))
+    else:
+        df['cond3'] = (df['stoch_k'] < over_sell_threshold)
+        
 
     
     cond4_raw = ((df['close'] < df['bb_lower']) & ((df['close'] / df['open']) < 1.0))
@@ -261,7 +414,7 @@ def low_bb_du_2(
     lowest_close_prev = (df['close'].shift(1).rolling(window).min())
     df['cond5'] = (df['close'] / lowest_close_prev) < cwlc_ratio_lower
 
-    df['cond6'] = df['low'] / df['open'] < lc_ratio_lower
+    df['cond6'] = df['low'] / df['open'] < lo_ratio_lower
     df['cond7'] = (((df['close'] - df['bb_lower']) / (df['bb_upper'] - df['bb_lower'])) < close_band_ratio_lower)
 
     df['cond1-7'] = df['cond1'] & df['cond2'] & df['cond3'] & df['cond4'] & df['cond5'] & df['cond6'] & df['cond7']
@@ -293,5 +446,7 @@ STRATEGY_REGISTRY = {
     "explode_volume_breakout_2": explode_volume_breakout_2,
     "explode_volume_volatility_breakout_2": explode_volume_volatility_breakout_2,
     "low_bb_du": low_bb_du,
-    "low_bb_du_2": low_bb_du_2
+    "low_bb_du_2": low_bb_du_2,
+    "low_bb_du_3": low_bb_du_3,
+    "low_bb_du_4": low_bb_du_4
 }
