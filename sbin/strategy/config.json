@@ -72,6 +72,21 @@
         }
     },
     {
+        "strategy_name": "low_bb_du_2",
+        "buy_signal_config": {
+            "window_list": [4,5,6],
+            "co_ratio_range_list":[[1.00,1.1],[1.00,1.07],[1.00,1.04],[1.0025,1.1],[1.0025,1.07],[1.0025,1.04],[1.005,1.1],[1.005,1.07],[1.005,1.04],[1.0075,1.1],[1.0075,1.07],[1.0075,1.04],[1.01,1.1],[1.01,1.07],[1.01,1.04],[1.02,1.04],[1.02,1.07],[1.02,1.1]],
+            "over_sell_threshold_list": [25, 30, 20],
+            "cwlc_ratio_lower_list": [1.05, 1.075, 1.1, 1.125, 1.15],
+            "lc_ratio_lower_list": [1.0, 0.99, 0.98],
+            "close_band_ratio_lower_list": [0.5, 0.35, 0.2]
+        },
+        "sell_signal_config": {
+            "low_limit_ratio_list": [0.975, 0.95, 0.925, 0.9],
+            "high_limit_ratio_list": [1.025, 1.05, 1.075, 1.1, 1.125, 1.15, 1.175, 1.2]
+        }
+    },
+    {
         "strategy_name": "larry_williams_vb",
         "buy_signal_config": {
             "k_list": [0.4, 0.5, 0.6]
