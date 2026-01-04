@@ -20,9 +20,9 @@ if [ -z "$target_interval" ]; then
     target_interval=minute60
 fi
 
-# python train_xgb/06_train_strategy_model_by_xgb.py --root_dir ${root_dir} --market ${market} --target_strategy_feature low_bb_du --interval day --model_output_dir ${model_output_dir}
+# bash 05_get_strategy_filtered_data.sh
 
-python train_xgb/06_train_strategy_model_by_xgb.py --root_dir ${root_dir} --market ${market} --target_strategy_feature low_bb_du --interval minute60 --model_output_dir ${model_output_dir}
-python train_xgb/06_train_strategy_model_by_xgb.py --root_dir ${root_dir} --market ${market} --target_strategy_feature low_bb_du --interval minute240 --model_output_dir ${model_output_dir}
-python train_xgb/06_train_strategy_model_by_xgb.py --root_dir ${root_dir} --market ${market} --target_strategy_feature low_bb_du --interval day --model_output_dir ${model_output_dir}
-
+python train_xgb/06_train_strategy_model_by_xgb.py --root_dir ${root_dir} --market ${market} --target_strategy_feature low_bb_du --interval minute60 --model_output_dir ${model_output_dir} > log_06.bt.minute60.txt 2>&1 &
+python train_xgb/06_train_strategy_model_by_xgb.py --root_dir ${root_dir} --market ${market} --target_strategy_feature low_bb_du --interval minute240 --model_output_dir ${model_output_dir} > log_06.bt.minute240.txt 2>&1 &
+python train_xgb/06_train_strategy_model_by_xgb.py --root_dir ${root_dir} --market ${market} --target_strategy_feature low_bb_du --interval day --model_output_dir ${model_output_dir} > log_06.bt.day.txt 2>&1 &
+wait

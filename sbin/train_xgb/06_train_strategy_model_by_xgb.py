@@ -7,14 +7,44 @@ from datetime import datetime, timedelta
 from collections import Counter
 import sqlite3
 from xgboost import XGBClassifier, plot_importance
-from sklearn.metrics import accuracy_score, precision_score, recall_score, confusion_matrix
+from sklearn.metrics import accuracy_score, precision_score, recall_score, confusion_matrix, precision_recall_curve
 from sklearn.metrics import f1_score, roc_auc_score
 from imblearn.over_sampling import SMOTE, RandomOverSampler
 from sklearn.datasets import load_boston
 from matplotlib import pyplot as plt
 import math
 import numpy as np
+import itertools
+import copy
+import random
+import tempfile
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from train_xgb.strategy_feature import get_feats_and_labels_num
 
+
+def copy_xgb_model(model):
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    model.save_model(tmp.name)
+
+    new_model = type(model)()   # XGBClassifier or XGBRegressor
+    new_model.load_model(tmp.name)
+    return new_model
+
+
+def feature_all(strategy_feature_name):
+    feat_num = get_feats_and_labels_num(strategy_feature_name)[0]
+    FEATURE_COLS = [f"feat{i}" for i in range(feat_num)]
+    return FEATURE_COLS
+
+def feature_top_k(classifier, best_score_model, k, strategy_feature_name):
+    if classifier and best_score_model:
+        classifier.model = best_score_model
+        importance = classifier.get_importance()  
+        sorted_feats = sorted(importance.items(), key=lambda x: x[1], reverse=True)
+        return [f for f, _ in sorted_feats[:k]]
+    lst = feature_all(strategy_feature_name)
+    random.shuffle(lst)
+    return lst[:k]
 
 def load_from_db(db_path, table_base):
     conn = sqlite3.connect(db_path)
@@ -54,13 +84,95 @@ def prepare_xy(df, feat_cols, label_cols, random_state=42):
 class Classifier:
     def __init__(self, model_config):
         self.model = XGBClassifier(**model_config)
+        self.best_threshold = 0.5
+
+    def infer(self, x, y, num_class):
+        y_pred = self.predict(x)
+        predictions = [round(value) for value in y_pred]
+        # evaluate predictions
+        test_confusion = confusion_matrix(y, predictions)
+        test_accuracy = accuracy_score(y, predictions)
+        test_precision = precision_score(y, predictions, average=average)
+        test_recall = recall_score(y, predictions, average=average)
+        test_f1 = f1_score(y, predictions, average=average)
+        #test_auc = roc_auc_score(y, predictions, multi_class='ovo', average=average)
+        test_auc = test_accuracy
+        
+        print("오차 행렬")
+        print(test_confusion)
+        print("정답 ratio : %.2f" %(y.mean()))
+        if average == 'binary':
+            print(f"정확도: {test_accuracy:.4f}, 정밀도: {test_precision:.4f}, 재현율: {test_recall:.4f}, F1: {test_f1:.4f}, AUC: {test_auc:.4f}")
+        else:
+            print("정확도: ", test_accuracy, ", 정밀도: ", test_precision, "재현율: ", test_recall, "F1: ", test_f1, "AUC: ", test_auc)
+
+        return self.model_score(test_confusion, test_precision), test_confusion, test_precision
+
+    def model_score(self, confusion, precision):
+        TN, FP, FN, TP = confusion.ravel()
+        base_score = (1.25 ** precision) * (0.8 ** (1 - precision))
+        return np.log(base_score) * (TP + FP)
+
+
+    def get_best_threshold(self, x_train, y_train, x_val, y_val, average='binary', min_precision=0.525, default_threshold=0.5):
+        train_proba = self.model.predict_proba(x_train)[:, 1] 
+        val_proba = self.model.predict_proba(x_val)[:, 1]
+        t_prec, t_rec, t_thr = precision_recall_curve(y_train, train_proba)
+        v_prec, v_rec, v_thr = precision_recall_curve(y_val, val_proba)
+
+        t_prec, t_rec = t_prec[:-1], t_rec[:-1]
+        v_prec, v_rec = v_prec[:-1], v_rec[:-1]
+
+        # val 기준 후보
+        v_mask = v_prec >= min_precision
+        if not v_mask.any():
+            return default_threshold
+
+        best_threshold = default_threshold
+        best_score = -1
+
+        for thr in v_thr[v_mask]:
+            if thr < 0.5:
+                continue
+            # train precision 확인
+            train_pred = (train_proba >= thr).astype(int)
+            
+            tp = ((train_pred == 1) & (y_train == 1)).sum()
+            fp = ((train_pred == 1) & (y_train == 0)).sum()
+
+            train_precision = tp / (tp + fp + 1e-9)
+
+            if train_precision >= min_precision:                
+                train_confusion = confusion_matrix(y_train, train_pred)
+                train_score = self.model_score(train_confusion, train_precision)
+
+                val_pred = (val_proba >= thr).astype(int)
+                tp_v = ((val_pred == 1) & (y_val == 1)).sum()
+                fp_v = ((val_pred == 1) & (y_val == 0)).sum()
+                fn_v = ((val_pred == 0) & (y_val == 1)).sum()
+                val_recall = tp_v / (tp_v + fn_v + 1e-9)
+                val_precision = tp_v / (tp_v + fp_v + 1e-9)
+                val_confusion = confusion_matrix(y_val, val_pred)
+                val_score = self.model_score(val_confusion, val_precision)
+                total_score = train_score + val_score
+                if train_score + val_score > best_score:
+                    best_score = train_score + val_score
+                    best_threshold = thr
+
+        return best_threshold
+
+    def predict(self, x):
+        proba = self.model.predict_proba(x)[:, 1]
+        return (proba >= self.best_threshold).astype(int)
 
     def train(self, x_train, y_train, x_val, y_val, num_class=2, average='binary'):
         self.columns = x_train.columns
-        # self.model.fit(x_train, y_train, verbose=True,
-        #                eval_set=[(x_val, y_val)])
-        self.model.fit(x_train, y_train, eval_set=[(x_val, y_val)])
-        y_pred = self.model.predict(x_train)
+        self.model.fit(x_train, y_train, eval_set=[(x_val, y_val)], verbose=False)
+
+        self.best_threshold = self.get_best_threshold(x_train, y_train, x_val, y_val)
+
+        y_pred = self.predict(x_train)
+        
         predictions = [ round(value) for value in y_pred]
         # evaluate predictions
             
@@ -71,9 +183,14 @@ class Classifier:
         train_f1 = f1_score(y_train, predictions, average=average)
         #train_auc = roc_auc_score(y_train, predictions, multi_class='ovo', average=average)
         train_auc = train_accuracy
+
+        train_score = self.model_score(train_confusion, train_precision)
+        
+        print ("#######  train result START ########")
         
         print("오차 행렬")
         print(train_confusion)
+        print("정답 ratio : %.2f" %(y_train.mean()))
         if average == 'binary':
             print(f"정확도: {train_accuracy:.4f}, 정밀도: {train_precision:.4f}, 재현율: {train_recall:.4f}, F1: {train_f1:.4f}, AUC: {train_auc:.4f}")
         else:
@@ -81,37 +198,24 @@ class Classifier:
         # for i, y_ in enumerate(y_train):
         #     print(y_, y_pred[i])
         
-        print ("#############################################################################")
+        print ("#######  val result START ########")
         # make predictions for test data
-        y_pred = self.model.predict(x_val)
-        predictions = [round(value) for value in y_pred]
-        # evaluate predictions
-        test_confusion = confusion_matrix(y_val, predictions)
-        test_accuracy = accuracy_score(y_val, predictions)
-        test_precision = precision_score(y_val, predictions, average=average)
-        test_recall = recall_score(y_val, predictions, average=average)
-        test_f1 = f1_score(y_val, predictions, average=average)
-        #test_auc = roc_auc_score(y_val, predictions, multi_class='ovo', average=average)
-        test_auc = test_accuracy
+        val_score, val_confusion, val_precision = self.infer(x_val, y_val, num_class)
         
-        print("오차 행렬")
-        print(test_confusion)
-        if average == 'binary':
-            print(f"정확도: {test_accuracy:.4f}, 정밀도: {test_precision:.4f}, 재현율: {test_recall:.4f}, F1: {test_f1:.4f}, AUC: {test_auc:.4f}")
-        else:
-            print("정확도: ", test_accuracy, ", 정밀도: ", test_precision, "재현율: ", test_recall, "F1: ", test_f1, "AUC: ", test_auc)
-
-        # for i, y_ in enumerate(y_val):
-        #     print(y_, y_pred[i])
-        
-        feat_score = self.model.feature_importances_
-        print(feat_score)
-        
-        return self.model
+        return self.model, train_score, val_score, train_confusion, val_confusion, train_precision, val_precision
     
+    def get_importance(self):
+        feature_importance = self.model.feature_importances_
+        dic = Counter()
+        for col, score in zip(self.columns, feature_importance):
+            dic[col] = score
+        return dic
+
     def print_importance(self):
         feature_importance = self.model.feature_importances_
         print("feature count : ", len(feature_importance))
+        print(feature_importance)
+
         plot_importance(model)
         dic = Counter()
         for col, score in zip(self.columns, feature_importance):
@@ -130,24 +234,35 @@ args = parser.parse_args()
 
 
 if __name__ == "__main__":
-    
+    strategy_feature_name = args.target_strategy_feature
     xgb_dir = os.path.join(args.root_dir, "var/xgb_data")
     table_base = f"xgb_{args.market}_{args.interval}_{args.target_strategy_feature}"
+    print("######################## ", table_base, " ########################")
     xgb_db_path = os.path.join(xgb_dir, f"{table_base}.db")
     train_df, val_df, test_df = load_from_db(xgb_db_path, table_base)
+    feat_num, label_num = get_feats_and_labels_num(args.target_strategy_feature)
 
-    FEATURE_COLS = [f"f{i}" for i in range(1, 23)]
-    LABEL_COLS = ["label1", "label2", "label3", "label4"]
+    FEATURE_COLS = [f"feat{i}" for i in range(feat_num)]
+    LABEL_COLS = [f"label{i}" for i in range(label_num)]
 
-    x_train, ys_train = prepare_xy(train_df, FEATURE_COLS, LABEL_COLS)
-    x_val, ys_val = prepare_xy(val_df, FEATURE_COLS, LABEL_COLS)
-    x_test, ys_test = prepare_xy(test_df, FEATURE_COLS, LABEL_COLS)
+    # x_train, ys_train = prepare_xy(train_df, FEATURE_COLS, LABEL_COLS)
+    # x_val, ys_val = prepare_xy(val_df, FEATURE_COLS, LABEL_COLS)
+    # x_test, ys_test = prepare_xy(test_df, FEATURE_COLS, LABEL_COLS)
+
+    x_train, ys_train = prepare_xy(test_df, FEATURE_COLS, LABEL_COLS)
+    x_val, ys_val = prepare_xy(train_df, FEATURE_COLS, LABEL_COLS)
+    x_test, ys_test = prepare_xy(val_df, FEATURE_COLS, LABEL_COLS)
+
+    # x_train, ys_train = prepare_xy(val_df, FEATURE_COLS, LABEL_COLS)
+    # x_val, ys_val = prepare_xy(train_df, FEATURE_COLS, LABEL_COLS)
+    # x_test, ys_test = prepare_xy(test_df, FEATURE_COLS, LABEL_COLS)
 
     for label_col in LABEL_COLS:
+        print("######################## ", label_col, " ########################")
         y_train = ys_train[label_col]
         y_val = ys_val[label_col]
         y_test = ys_test[label_col]
-
+        
         print(y_train.shape, x_train.shape, y_val.shape, x_val.shape)
 
         model_config = None
@@ -179,15 +294,84 @@ if __name__ == "__main__":
             x_train, y_train = smote.fit_resample(x_train, y_train)
             print('after resample : ', len(x_train), len(y_train))
 
-        config_string = json.dumps(model_config)
-        classifier = Classifier(model_config)
-        average = 'binary'
-        model = classifier.train(x_train, y_train, x_val, y_val, num_class=num_class, average=average)
-        classifier.print_importance()
-        print(config_string)
+
+        PARAM_GRID = {
+            "learning_rate": [0.02, 0.05],
+            "max_depth": [2, 3, 5],
+            "min_child_weight": [2, 5, 20],
+            "gamma": [1.0, 5.0],
+            "n_estimators": [500, 2000],
+            "early_stopping_rounds": [30, 80],
+        }
+        
+        results = []
+
+        param_keys = PARAM_GRID.keys()
+        param_combinations = list(itertools.product(*PARAM_GRID.values()))
+
+        best_score = 0.0
+        best_score_model = None
+        best_param = ""
+        best_feats = ""
+        best_threshold = 0.5
+        
+        for idx, param_values in enumerate(param_combinations):
+            new_cfg = dict(zip(param_keys, param_values))
+            for k, v in new_cfg.items():
+                model_config[k] = v
+                classifier = None
+                for feat_num in range(len(FEATURE_COLS), 5, -5):
+                    feat_cols = feature_top_k(classifier, best_score_model, feat_num, strategy_feature_name)
+                    config_string = json.dumps(model_config)
+                    classifier = Classifier(model_config)
+                    average = 'binary'
+                    xtr = x_train[feat_cols]
+                    xva = x_val[feat_cols]
+                    xte = x_test[feat_cols]
+
+                    model, train_score, val_score, train_confusion, val_confusion, train_precision, val_precision = classifier.train(xtr, y_train, xva, y_val, num_class=num_class, average=average)
+                    print(feat_cols)
+                    print ("#######  test result START,", table_base + '_' + label_col, " ########")
+                    test_score, test_confusion, test_precision = classifier.infer(xte, y_test, num_class)
+                    print ("##########################################################################################")
+                    
+                    has_negative = any(s < 0 for s in (train_score, val_score, test_score))
+                    total_score = 0.0
+                    if not has_negative:
+                        total_score = min(min(train_score, val_score), test_score)
+
+                    if total_score > best_score:
+                        best_score = total_score
+                        best_score_model = copy_xgb_model(model)
+                        best_param = config_string
+                        best_feats = feat_cols
+                        best_confusion = [("train", train_confusion), ("val", val_confusion), ("test", test_confusion)]
+                        best_threshold = classifier.best_threshold
+                        target = table_base.replace('_', '-') + '-' + label_col + '-' + str(best_threshold)
+                        print("!!!!!!!!!!!!!! BEST PARAM CANDIDATE !!!!!!!!!!!!!!")
+                        print(target, best_param, best_feats, best_score)
+                        for key, confusion in best_confusion:
+                            print("#### %s ####" %(key))
+                            print(confusion)
+                        print("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
+                    
+                    # classifier.print_importance()
+                    # print(config_string)
+                    
+                    
         model_out_dir = os.path.join(args.root_dir, args.model_output_dir)
         os.makedirs(model_out_dir, exist_ok=True)
-        
-        model_output_path = os.path.join(model_out_dir,  table_base + '_' + label_col + '.classifier')
-        model.save_model(model_output_path)
-
+        str_feats = "".join(f.replace("feat", "f") for f in best_feats)
+        model_output_path = os.path.join(model_out_dir,  table_base.replace('_', '-') + '-' + label_col + '-' + str(best_threshold) + '-' + str_feats)
+        if best_score_model:
+            best_score_model.save_model(model_output_path)
+            print("@@@@@@@@@@@@@ BEST SCORE START @@@@@@@@@@@@@@@")
+            print(table_base.replace('_', '-') + '-' + label_col)
+            print(best_param)
+            print(best_feats)
+            print(best_score)
+            print(best_threshold)
+            for key, confusion in best_confusion:
+                print("#### %s ####" %(key))
+                print(confusion)
+            print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from collections import Counter
 import sqlite3
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from train_xgb.strategy_feature import get_strategy_feature_filtered_feature_and_labels
+from train_xgb.strategy_feature import get_strategy_feature_filtered_feature_and_labels, get_feats_and_labels_num
 
 
 def get_tickers(db_path, table_name):
@@ -52,29 +52,19 @@ def load_ohlcv(db_path, table_name, ticker):
 
     return df
 
-def save_to_db(db_path, table_base, train_df, val_df, test_df):
+def save_to_db(db_path, table_base, dfs):
     conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
 
-    train_df.to_sql(
-        name=f"{table_base}_train",
-        con=conn,
-        if_exists="replace",
-        index=False
-    )
-
-    val_df.to_sql(
-        name=f"{table_base}_val",
-        con=conn,
-        if_exists="replace",
-        index=False
-    )
-
-    test_df.to_sql(
-        name=f"{table_base}_test",
-        con=conn,
-        if_exists="replace",
-        index=False
-    )
+    for suffix, df in dfs.items():
+        table_name = f"{table_base}_{suffix}"
+        cur.execute(f"DROP TABLE IF EXISTS {table_name}")
+        df.to_sql(
+            name=table_name,
+            con=conn,
+            if_exists="replace",
+            index=False
+        )
 
     conn.close()
 
@@ -103,8 +93,8 @@ if __name__ == "__main__":
         if len(df) <= 50:
             continue
 
-        df = get_strategy_feature_filtered_feature_and_labels(df, args.target_strategy_feature)
-        
+        df = get_strategy_feature_filtered_feature_and_labels(df, args.target_strategy_feature, args.interval)
+        feat_num, label_num = get_feats_and_labels_num(args.target_strategy_feature)
         tmp_df = df[df['date'] < train_cut]
         if not tmp_df.empty:
             train_dfs.append(tmp_df)
@@ -124,5 +114,13 @@ if __name__ == "__main__":
     
     table_base = f"xgb_{args.market}_{args.interval}_{args.target_strategy_feature}"
     xgb_db_path = os.path.join(xgb_dir, f"{table_base}.db")
-    save_to_db(xgb_db_path, table_base, train_df, val_df, test_df)
+    save_to_db(
+        xgb_db_path,
+        table_base,
+        {
+            "train": train_df,
+            "val": val_df,
+            "test": test_df,
+        }
+    )
 

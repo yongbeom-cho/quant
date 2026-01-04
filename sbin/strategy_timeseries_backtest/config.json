@@ -40,5 +40,26 @@
         "max_tx_cnts": [20, 10],
         "uppers_list": [[1.1], [1.075]],
         "lower_list": [0.95, 0.925]
+    },
+    "day-low_bb_du-label0": {
+        "start_date": "201701010900",
+        "end_date": "202512240800",
+        "max_tx_cnts": [20, 10],
+        "uppers_list": [[1.11], [1.15]],
+        "lower_list": [0.9, 0.875]
+    },
+    "day-low_bb_du-label1": {
+        "start_date": "201701010900",
+        "end_date": "202512240800",
+        "max_tx_cnts": [20, 10],
+        "uppers_list": [[1.11], [1.15]],
+        "lower_list": [0.9, 0.875]
+    },
+    "day-low_bb_du-label2": {
+        "start_date": "201701010900",
+        "end_date": "202512240800",
+        "max_tx_cnts": [20, 10],
+        "uppers_list": [[1.15], [1.18]],
+        "lower_list": [0.875, 0.85]
     }
 }
