@@ -1,5 +1,7 @@
 import talib
 import numpy as np
+import sys
+import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from strategy.xgb_strategy import apply_strategy_xgb_feats
 

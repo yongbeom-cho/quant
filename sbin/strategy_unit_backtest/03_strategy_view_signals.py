@@ -23,13 +23,14 @@ def view_chart(df):
         'low': 'Low',
         'close': 'Close'
     })
-
     
-    bb_upper = mpf.make_addplot(df_plot['bb_upper'], color='red', width=1)
-    bb_mid   = mpf.make_addplot(df_plot['bb_mid'],   color='green', width=1)
-    bb_lower = mpf.make_addplot(df_plot['bb_lower'], color='blue', width=1)
+    add_plots = []
+    if 'bb_upper' in df_plot.columns:
+        bb_upper = mpf.make_addplot(df_plot['bb_upper'], color='red', width=1)
+        bb_mid   = mpf.make_addplot(df_plot['bb_mid'],   color='green', width=1)
+        bb_lower = mpf.make_addplot(df_plot['bb_lower'], color='blue', width=1)
 
-    add_plots = [bb_upper, bb_mid, bb_lower]
+        add_plots = [bb_upper, bb_mid, bb_lower]
 
     if 'signal' in df_plot.columns and df_plot['signal'].any():
         signal_y = df_plot['Low'] * 0.995

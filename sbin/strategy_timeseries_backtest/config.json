@@ -44,21 +44,63 @@
     "day-low_bb_du-label0": {
         "start_date": "201701010900",
         "end_date": "202512240800",
-        "max_tx_cnts": [20, 10],
+        "max_tx_cnts": [20, 10, 5],
         "uppers_list": [[1.11], [1.15]],
         "lower_list": [0.9, 0.875]
     },
     "day-low_bb_du-label1": {
         "start_date": "201701010900",
         "end_date": "202512240800",
-        "max_tx_cnts": [20, 10],
+        "max_tx_cnts": [20, 10, 5],
         "uppers_list": [[1.11], [1.15]],
         "lower_list": [0.9, 0.875]
     },
     "day-low_bb_du-label2": {
         "start_date": "201701010900",
         "end_date": "202512240800",
-        "max_tx_cnts": [20, 10],
+        "max_tx_cnts": [20, 10, 5],
+        "uppers_list": [[1.15], [1.18]],
+        "lower_list": [0.875, 0.85]
+    },
+    "minute240-low_bb_du-label0": {
+        "start_date": "201701010900",
+        "end_date": "202512240800",
+        "max_tx_cnts": [20, 10, 5],
+        "uppers_list": [[1.11], [1.15]],
+        "lower_list": [0.9, 0.875]
+    },
+    "minute240-low_bb_du-label1": {
+        "start_date": "201701010900",
+        "end_date": "202512240800",
+        "max_tx_cnts": [20, 10, 5],
+        "uppers_list": [[1.11], [1.15]],
+        "lower_list": [0.9, 0.875]
+    },
+    "minute240-low_bb_du-label2": {
+        "start_date": "201701010900",
+        "end_date": "202512240800",
+        "max_tx_cnts": [20, 10, 5],
+        "uppers_list": [[1.15], [1.18]],
+        "lower_list": [0.875, 0.85]
+    },
+    "minute60-low_bb_du-label0": {
+        "start_date": "201701010900",
+        "end_date": "202512240800",
+        "max_tx_cnts": [10, 20],
+        "uppers_list": [[1.11], [1.15]],
+        "lower_list": [0.9, 0.875]
+    },
+    "minute60-low_bb_du-label1": {
+        "start_date": "201701010900",
+        "end_date": "202512240800",
+        "max_tx_cnts": [10, 20],
+        "uppers_list": [[1.11], [1.15]],
+        "lower_list": [0.9, 0.875]
+    },
+    "minute60-low_bb_du-label2": {
+        "start_date": "201701010900",
+        "end_date": "202512240800",
+        "max_tx_cnts": [10, 20],
         "uppers_list": [[1.15], [1.18]],
         "lower_list": [0.875, 0.85]
     }

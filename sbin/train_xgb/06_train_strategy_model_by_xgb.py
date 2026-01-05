@@ -114,7 +114,7 @@ class Classifier:
         return np.log(base_score) * (TP + FP)
 
 
-    def get_best_threshold(self, x_train, y_train, x_val, y_val, average='binary', min_precision=0.525, default_threshold=0.5):
+    def get_best_threshold(self, x_train, y_train, x_val, y_val, average='binary', min_precision=0.55, default_threshold=0.5):
         train_proba = self.model.predict_proba(x_train)[:, 1] 
         val_proba = self.model.predict_proba(x_val)[:, 1]
         t_prec, t_rec, t_thr = precision_recall_curve(y_train, train_proba)
@@ -130,8 +130,11 @@ class Classifier:
 
         best_threshold = default_threshold
         best_score = -1
-
-        for thr in v_thr[v_mask]:
+            
+        vals = v_thr[v_mask]
+        n = len(vals)
+        step = max(1, n // 100)
+        for thr in vals[::step]:
             if thr < 0.5:
                 continue
             # train precision 확인
@@ -141,8 +144,7 @@ class Classifier:
             fp = ((train_pred == 1) & (y_train == 0)).sum()
 
             train_precision = tp / (tp + fp + 1e-9)
-
-            if train_precision >= min_precision:                
+            if train_precision >= min_precision:
                 train_confusion = confusion_matrix(y_train, train_pred)
                 train_score = self.model_score(train_confusion, train_precision)
 
@@ -165,11 +167,11 @@ class Classifier:
         proba = self.model.predict_proba(x)[:, 1]
         return (proba >= self.best_threshold).astype(int)
 
-    def train(self, x_train, y_train, x_val, y_val, num_class=2, average='binary'):
+    def train(self, x_train, y_train, x_val, y_val, num_class=2, average='binary', min_precision=0.55):
         self.columns = x_train.columns
         self.model.fit(x_train, y_train, eval_set=[(x_val, y_val)], verbose=False)
 
-        self.best_threshold = self.get_best_threshold(x_train, y_train, x_val, y_val)
+        self.best_threshold = self.get_best_threshold(x_train, y_train, x_val, y_val, average=average, min_precision=min_precision)
 
         y_pred = self.predict(x_train)
         
@@ -237,6 +239,7 @@ if __name__ == "__main__":
     strategy_feature_name = args.target_strategy_feature
     xgb_dir = os.path.join(args.root_dir, "var/xgb_data")
     table_base = f"xgb_{args.market}_{args.interval}_{args.target_strategy_feature}"
+    model_name_base = f"xgb-{args.market}-{args.interval}-{args.target_strategy_feature}"
     print("######################## ", table_base, " ########################")
     xgb_db_path = os.path.join(xgb_dir, f"{table_base}.db")
     train_df, val_df, test_df = load_from_db(xgb_db_path, table_base)
@@ -303,6 +306,14 @@ if __name__ == "__main__":
             "n_estimators": [500, 2000],
             "early_stopping_rounds": [30, 80],
         }
+        PARAM_GRID = {
+            "learning_rate": [0.05],
+            "max_depth": [3, 5],
+            "min_child_weight": [5],
+            "gamma": [1.0],
+            "n_estimators": [500, 2000],
+            "early_stopping_rounds": [80],
+        }
         
         results = []
 
@@ -315,6 +326,7 @@ if __name__ == "__main__":
         best_feats = ""
         best_threshold = 0.5
         
+        print("TRAIN START")
         for idx, param_values in enumerate(param_combinations):
             new_cfg = dict(zip(param_keys, param_values))
             for k, v in new_cfg.items():
@@ -329,9 +341,14 @@ if __name__ == "__main__":
                     xva = x_val[feat_cols]
                     xte = x_test[feat_cols]
 
-                    model, train_score, val_score, train_confusion, val_confusion, train_precision, val_precision = classifier.train(xtr, y_train, xva, y_val, num_class=num_class, average=average)
+                    print("Classifier TRAIN START")
+                    min_precision = 0.54
+                    if len(xtr) > 10000:
+                        min_precision = 0.575
+                    model, train_score, val_score, train_confusion, val_confusion, train_precision, val_precision = classifier.train(xtr, y_train, xva, y_val, num_class=num_class, average=average, min_precision=min_precision)
+                    print("Classifier TRAIN END")
                     print(feat_cols)
-                    print ("#######  test result START,", table_base + '_' + label_col, " ########")
+                    print ("#######  test result START,", model_name_base + '-' + label_col, " ########")
                     test_score, test_confusion, test_precision = classifier.infer(xte, y_test, num_class)
                     print ("##########################################################################################")
                     
@@ -347,7 +364,7 @@ if __name__ == "__main__":
                         best_feats = feat_cols
                         best_confusion = [("train", train_confusion), ("val", val_confusion), ("test", test_confusion)]
                         best_threshold = classifier.best_threshold
-                        target = table_base.replace('_', '-') + '-' + label_col + '-' + str(best_threshold)
+                        target = model_name_base + '-' + label_col + '-' + str(best_threshold)
                         print("!!!!!!!!!!!!!! BEST PARAM CANDIDATE !!!!!!!!!!!!!!")
                         print(target, best_param, best_feats, best_score)
                         for key, confusion in best_confusion:
@@ -362,11 +379,11 @@ if __name__ == "__main__":
         model_out_dir = os.path.join(args.root_dir, args.model_output_dir)
         os.makedirs(model_out_dir, exist_ok=True)
         str_feats = "".join(f.replace("feat", "f") for f in best_feats)
-        model_output_path = os.path.join(model_out_dir,  table_base.replace('_', '-') + '-' + label_col + '-' + str(best_threshold) + '-' + str_feats)
+        model_output_path = os.path.join(model_out_dir,  model_name_base + '-' + label_col + '-' + str(best_threshold) + '-' + str_feats)
         if best_score_model:
             best_score_model.save_model(model_output_path)
             print("@@@@@@@@@@@@@ BEST SCORE START @@@@@@@@@@@@@@@")
-            print(table_base.replace('_', '-') + '-' + label_col)
+            print(model_name_base + '-' + label_col)
             print(best_param)
             print(best_feats)
             print(best_score)

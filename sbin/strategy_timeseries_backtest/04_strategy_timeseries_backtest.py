@@ -248,7 +248,7 @@ def timeseries_backtest(strategy_config, args, ts_backtest_cfg):
         df = df[
             (df['date'] >= start_date) &
             (df['date'] <= end_date)
-        ].sort_values('date').reset_index(drop=True)
+        ].sort_values('date').reset_index(drop=True).set_index('date', drop=False)
         if len(df) <= 50:
             continue
         code_dfs[ticker] = df
@@ -285,9 +285,8 @@ def timeseries_backtest(strategy_config, args, ts_backtest_cfg):
                     buy_cand_code_ohlcvs = {}
 
                     for code, df in code_dfs.items():
-                        mask = (df['date'] == cur_date)
-                        if mask.any():
-                            ohlcv = df.loc[mask].iloc[0]
+                        if cur_date in df.index:
+                            ohlcv = df.loc[cur_date]
                             code_prices[code] = ohlcv['close']
                             if ohlcv['signal'] == True:
                                 buy_cand_code_volumes[code] = ohlcv['volume']
