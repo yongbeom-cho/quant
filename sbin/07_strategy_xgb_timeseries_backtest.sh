@@ -6,33 +6,50 @@ conda env config vars set PYTORCH_ENABLE_MPS_FALLBACK=1
 conda activate stock
 conda env config vars set PYTORCH_ENABLE_MPS_FALLBACK=1
 
-target_strategy=$1
-target_interval=$2
 
 market=coin
+strategy_name=low_bb_du
 root_dir=$(cd .. && pwd)
 
-if [ -z "$target_strategy" ]; then
-    target_strategy=low_bb_du_2
-fi
+xgb_data_dir=${root_dir}/var/xgb_data.v3.0
+train_log_dir=${root_dir}/var/log/train_xgb.v3.0
+log_dir=${root_dir}/var/log/strategy_xgb_timeseries_backtest.v3.0
+model_dir=${root_dir}/var/xgb_model.v3.0
 
-if [ -z "$target_interval" ]; then
-    target_interval=minute60
-fi
+mkdir -p ${log_dir}
 
+bash 06_train_strategy_model_by_xgb.sh ${strategy_name} ${xgb_data_dir} ${model_dir} ${train_log_dir}
 
-mkdir -p ${root_dir}/var/log/strategy_xgb_timeseries_backtest
-
-
-python strategy_timeseries_backtest/07_strategy_timeseries_backtest.py --root_dir ${root_dir} --model_name xgb-coin-day-low_bb_du-label0-0.52220565-f7f3f8f35f30f5f4f14f34f22f18f28f11f20 > ${root_dir}/var/log/strategy_xgb_timeseries_backtest/low_bb_du.day.label0.txt 2>&1 &
-python strategy_timeseries_backtest/07_strategy_timeseries_backtest.py --root_dir ${root_dir} --model_name xgb-coin-day-low_bb_du-label1-0.5140001-f41f6f31f18f4f8f9f20f33f13f5f42f7f27 > ${root_dir}/var/log/strategy_xgb_timeseries_backtest/low_bb_du.day.label1.txt 2>&1 &
-python strategy_timeseries_backtest/07_strategy_timeseries_backtest.py --root_dir ${root_dir} --model_name xgb-coin-day-low_bb_du-label2-0.51423204-f18f37f3f12f33f21f14f35f8f9f2f6f43f36 > ${root_dir}/var/log/strategy_xgb_timeseries_backtest/low_bb_du.day.label2.txt 2>&1 &
-
-python strategy_timeseries_backtest/07_strategy_timeseries_backtest.py --root_dir ${root_dir} --model_name xgb-coin-minute240-low_bb_du-label0-0.92753154-f9f12f32f33f15f22f2f24f28 > ${root_dir}/var/log/strategy_xgb_timeseries_backtest/low_bb_du.minute240.label0.txt 2>&1 &
-python strategy_timeseries_backtest/07_strategy_timeseries_backtest.py --root_dir ${root_dir} --model_name xgb-coin-minute240-low_bb_du-label1-0.8006095-f19f43f14f32f29f3f40f41f10f6f16f37f12f15 > ${root_dir}/var/log/strategy_xgb_timeseries_backtest/low_bb_du.minute240.label1.txt 2>&1 &
-python strategy_timeseries_backtest/07_strategy_timeseries_backtest.py --root_dir ${root_dir} --model_name xgb-coin-minute240-low_bb_du-label2-0.78588766-f9f32f16f20f40f4f14f33f11f0f38f43f29f10f41f8f34f19f25f12f37f13f36f21f42f15f6f28f24f17f3f23f7f31 > ${root_dir}/var/log/strategy_xgb_timeseries_backtest/low_bb_du.minute240.label2.txt 2>&1 &
-
-python strategy_timeseries_backtest/07_strategy_timeseries_backtest.py --root_dir ${root_dir} --model_name xgb-coin-minute60-low_bb_du-label0-0.5630118-f33f32f19f18f22f16f35f7f42 > ${root_dir}/var/log/strategy_xgb_timeseries_backtest/low_bb_du.minute60.label0.txt 2>&1 &
-python strategy_timeseries_backtest/07_strategy_timeseries_backtest.py --root_dir ${root_dir} --model_name xgb-coin-minute60-low_bb_du-label1-0.5548528-f18f32f22f19f16f21f24f2f39f25f35f40f7f37f0f36f42f34f29f9f31f3f20f17 > ${root_dir}/var/log/strategy_xgb_timeseries_backtest/low_bb_du.minute60.label1.txt 2>&1 &
-python strategy_timeseries_backtest/07_strategy_timeseries_backtest.py --root_dir ${root_dir} --model_name xgb-coin-minute60-low_bb_du-label2-0.5172057-f8f21f6f9f42f31f22f1f34f14f10f4f11f13f40f38f37f23f5f20f3f29f17f41f30f24f26f18f28f27f12f33f25f0f36f7f19f39f16f32f43f15f2f35 > ${root_dir}/var/log/strategy_xgb_timeseries_backtest/low_bb_du.minute60.label2.txt 2>&1 &
+for model in ${model_dir}/xgb-${market}-day-${strategy_name}*; do
+    model_name="$(basename "$model")"
+    tmp="${model_name#*-*-}"
+    log_fname="${tmp%-*}"
+    echo ${model_dir}/${model_name}
+    python strategy_timeseries_backtest/07_strategy_timeseries_backtest.py --root_dir ${root_dir} --model_name ${model_name} --model_dir ${model_dir} > ${log_dir}/${log_fname}.txt 2>&1 &
+done
 wait
+
+for model in ${model_dir}/xgb-${market}-minute240-${strategy_name}*; do
+    model_name="$(basename "$model")"
+    tmp="${model_name#*-*-}"
+    log_fname="${tmp%-*}"
+    echo ${model_dir}/${model_name}
+    python strategy_timeseries_backtest/07_strategy_timeseries_backtest.py --root_dir ${root_dir} --model_name ${model_name} --model_dir ${model_dir} > ${log_dir}/${log_fname}.txt 2>&1 &
+done
+wait
+
+for model in ${model_dir}/xgb-${market}-minute60-${strategy_name}*; do
+    model_name="$(basename "$model")"
+    tmp="${model_name#*-*-}"
+    log_fname="${tmp%-*}"
+    echo ${model_dir}/${model_name}
+    python strategy_timeseries_backtest/07_strategy_timeseries_backtest.py --root_dir ${root_dir} --model_name ${model_name} --model_dir ${model_dir} > ${log_dir}/${log_fname}.txt 2>&1 &
+done
+wait
+
+best_model_name_dir=${root_dir}/var/best_model_name
+mkdir -p ${best_model_name_dir}
+
+strategy_timeseries_backtest/08_get_best_model_by_ts_backtest.py --log_dir ${log_dir} --interval day --strategy_name ${strategy_name} > ${best_model_name_dir}/${strategy_name}.day.txt
+strategy_timeseries_backtest/08_get_best_model_by_ts_backtest.py --log_dir ${log_dir} --interval minute240 --strategy_name ${strategy_name} > ${best_model_name_dir}/${strategy_name}.minute240.txt
+strategy_timeseries_backtest/08_get_best_model_by_ts_backtest.py --log_dir ${log_dir} --interval minute60 --strategy_name ${strategy_name} > ${best_model_name_dir}/${strategy_name}.minute60.txt

@@ -3,11 +3,11 @@ import numpy as np
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from strategy.xgb_strategy import apply_strategy_xgb_feats
+from strategy.xgb_strategy import apply_strategy_xgb_feats, get_feats_num
 
 def get_feats_and_labels_num(strategy_feature_name):
     if strategy_feature_name == 'low_bb_du':
-        return 44, 3
+        return get_feats_num(strategy_feature_name), 3
     return 0, 0
 
 def get_strategy_feature_filtered_feature_and_labels(df, strategy_feature_name, interval='minute60'):
@@ -15,7 +15,7 @@ def get_strategy_feature_filtered_feature_and_labels(df, strategy_feature_name, 
         return low_bb_du(df, interval)
     return None, 0, 0
 
-def label_df(df, label_name, upper, lower):
+def label_df(df, label_name, upper, lower, max_cnt=9999):
     labels = np.full(len(df), np.nan)
 
     buy_indices = df.index[df['strategy_feature'] == True]
@@ -23,7 +23,7 @@ def label_df(df, label_name, upper, lower):
     for idx in buy_indices:
         buy_close = df.at[idx, 'close']
 
-        future = df.loc[idx+1:]
+        future = df.loc[idx+1:idx+1+max_cnt]
 
         # 손절 먼저 체크
         stop_loss = future[future['low'] < buy_close * lower]
@@ -41,8 +41,7 @@ def label_df(df, label_name, upper, lower):
 
         elif not take_profit.empty:
             labels[idx] = 1
-        # else:
-        #     # 끝까지 갔을 때
+        # elif len(future) > 0:
         #     last_close = future.iloc[-1]['close']
         #     labels[idx] = 1 if last_close > buy_close else 0
 
@@ -67,10 +66,9 @@ def low_bb_du(df, interval):
     need_cols = ['ticker', 'date', 'open', 'high', 'low', 'close', 'volume']
 
     df = df[df['strategy_feature'] == True]
-    df = (
-        df[feat_cols + label_cols + need_cols]
-        .replace([np.inf, -np.inf], np.nan)
-        .dropna()
-    )
+    use_cols = feat_cols + need_cols + label_cols
+    df = df[use_cols].replace([np.inf, -np.inf], np.nan)
+    df = df.dropna(subset=feat_cols + need_cols)
+    df = df.dropna(subset=label_cols, how="all")
     df = df.sample(frac=1, random_state=42).reset_index(drop=True)
     return df

@@ -229,7 +229,7 @@ def timeseries_backtest(args, ts_backtest_cfg):
     start_date = ts_backtest_cfg['start_date']
     end_date = ts_backtest_cfg['end_date']
 
-    dummy, market, interval, target_strategy, label_name, threshold, str_feat = args.model_name.split('-')
+    dummy, market, interval, target_strategy, label_name, min_precision, threshold, str_feat = args.model_name.split('-')
 
     table_name = f'{market}_ohlcv_{interval}'
     db_path = os.path.join(args.root_dir, f'var/data/{table_name}.db')
@@ -239,7 +239,7 @@ def timeseries_backtest(args, ts_backtest_cfg):
     
     code_dfs = {}
     date_list = set()
-    xgb_model_dir = os.path.join(args.root_dir, 'var/xgb_model')
+    xgb_model_dir = os.path.join(args.root_dir, args.model_dir)
     for ticker in tickers:
         if ticker in blacklist_tickers:
             continue
@@ -293,7 +293,6 @@ def timeseries_backtest(args, ts_backtest_cfg):
 
                         for code, df in code_dfs.items():
                             if cur_date in df.index:
-                                # ohlcv = df.loc[cur_date].iloc[0]
                                 ohlcv = df.loc[cur_date]
                                 code_prices[code] = ohlcv['close']
                                 if ohlcv['signal'] == True:
@@ -324,19 +323,15 @@ def timeseries_backtest(args, ts_backtest_cfg):
 
 parser = argparse.ArgumentParser(description='04_real_backtest')
 parser.add_argument('--root_dir', type=str, default="/Users/yongbeom/cyb/project/2025/quant")
-parser.add_argument('--model_name', type=str, default="xgb-coin-day-low_bb_du-label0-0.56676245-f3f8f31f14f22f34f40f20f36f7f24f38f5f23")
-# parser.add_argument('--market', type=str, default="coin")
-# parser.add_argument('--interval', type=str, default="minute60")
-# parser.add_argument('--target_strategy', type=str, default="low_bb_du_2")
+parser.add_argument('--model_name', type=str, default="xgb-coin-day-low_bb_du-label0-0.525-0.56676245-f3f8f31f14f22f34f40f20f36f7f24f38f5f23")
+parser.add_argument('--model_dir', type=str, default="var/xgb_model")
 parser.add_argument('--commision_fee', type=float, default=0.0005)
 parser.add_argument('--slippage_fee', type=float, default=0.002)
-
-
 
 args = parser.parse_args()
 
 if __name__ == "__main__":
-    dummy, market, interval, target_strategy, label_name, threshold, str_feat = args.model_name.split('-')
+    dummy, market, interval, target_strategy, label_name, min_precision, threshold, str_feat = args.model_name.split('-')
     
     ts_bt_cfg_path = os.path.join(args.root_dir, 'sbin/strategy_timeseries_backtest/config.json')
     with open(ts_bt_cfg_path, 'r', encoding='utf-8') as f:

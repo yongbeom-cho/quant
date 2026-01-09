@@ -73,18 +73,19 @@ parser.add_argument('--root_dir', type=str, default="/Users/yongbeom/cyb/project
 parser.add_argument('--market', type=str, default="coin")
 parser.add_argument('--interval', type=str, default="minute60")
 parser.add_argument('--target_strategy_feature', type=str, default="low_bb_du")
+parser.add_argument('--output_dir', type=str, default="/Users/yongbeom/cyb/project/2025/quant/var/xgb_data")
 
 args = parser.parse_args()
 
 if __name__ == "__main__":
-    train_cut = "202301010900"
-    val_cut   = "202501010900"
+    train_cut = "202107010900" #20220101
+    val_cut   = "202407010900" # 20250101
     train_dfs = []
     val_dfs = []
     test_dfs = []
     table_name = f'{args.market}_ohlcv_{args.interval}'
     db_path = os.path.join(args.root_dir, f'var/data/{table_name}.db')
-    xgb_dir = os.path.join(args.root_dir, "var/xgb_data")
+    xgb_dir = args.output_dir
     os.makedirs(xgb_dir, exist_ok=True)
 
     tickers = get_tickers(db_path, table_name)
