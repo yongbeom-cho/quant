@@ -68,5 +68,50 @@
                 0.005
             ]
         }
+    },
+    {
+        "strategy_name": "vbt_with_filters_enhanced",
+        "buy_signal_config": {
+            "k_long_list": [
+                0.8,
+                1.0,
+                1.2
+            ],
+            "k_short_list": [
+                0.8,
+                1.0,
+                1.2
+            ],
+            "adx_threshold_list": [
+                30,
+                35,
+                40
+            ],
+            "volume_mult_list": [
+                1.5,
+                2.0
+            ],
+            "ema_confirm_list": [
+                true
+            ]
+        },
+        "sell_signal_config": {
+            "stop_loss_ratio_list": [
+                0.03
+            ],
+            "trailing_stop_mult_list": [
+                3.0,
+                4.0,
+                5.0
+            ],
+            "min_profit_ratio_list": [
+                0.01,
+                0.015
+            ],
+            "bailout_no_profit_days_list": [
+                2,
+                3
+            ]
+        }
     }
 ]
