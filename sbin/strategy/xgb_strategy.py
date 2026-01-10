@@ -15,7 +15,7 @@ def get_feats_num(strategy_feature_name):
 
 def apply_strategy_xgb(df, model_name, model_input_path):
     #1. feat apply
-    dummy, market, interval, target_strategy, label_name, min_threshold, threshold, str_feat = model_name.split('-')
+    dummy, market, interval, target_strategy, label_name, min_precision, threshold, str_feat = model_name.split('-')
     threshold = float(threshold)
     df = apply_strategy_xgb_feats(df, interval, target_strategy)
     feats = ['feat'+feat for feat in str_feat.split('f')[1:] ]
