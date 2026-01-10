@@ -18,38 +18,38 @@ model_dir=${root_dir}/var/xgb_model.v3.0
 
 mkdir -p ${log_dir}
 
-bash 06_train_strategy_model_by_xgb.sh ${strategy_name} ${xgb_data_dir} ${model_dir} ${train_log_dir}
+# bash 06_train_strategy_model_by_xgb.sh ${strategy_name} ${xgb_data_dir} ${model_dir} ${train_log_dir}
 
-for model in ${model_dir}/xgb-${market}-day-${strategy_name}*; do
+MAX_JOBS=8
+job_cnt=0
+
+for model in ${model_dir}/xgb-${market}-day-${strategy_name}* \
+             ${model_dir}/xgb-${market}-minute240-${strategy_name}* \
+             ${model_dir}/xgb-${market}-minute60-${strategy_name}*; do
+
     model_name="$(basename "$model")"
     tmp="${model_name#*-*-}"
     log_fname="${tmp%-*}"
-    echo ${model_dir}/${model_name}
-    python strategy_timeseries_backtest/07_strategy_timeseries_backtest.py --root_dir ${root_dir} --model_name ${model_name} --model_dir ${model_dir} > ${log_dir}/${log_fname}.txt 2>&1 &
+
+    python strategy_timeseries_backtest/07_strategy_timeseries_backtest.py \
+        --root_dir ${root_dir} \
+        --model_name ${model_name} \
+        --model_dir ${model_dir} \
+        > ${log_dir}/${log_fname}.txt 2>&1 &
+
+    ((job_cnt++))
+
+    if (( job_cnt >= MAX_JOBS )); then
+        wait
+        job_cnt=0
+    fi
 done
 wait
 
-for model in ${model_dir}/xgb-${market}-minute240-${strategy_name}*; do
-    model_name="$(basename "$model")"
-    tmp="${model_name#*-*-}"
-    log_fname="${tmp%-*}"
-    echo ${model_dir}/${model_name}
-    python strategy_timeseries_backtest/07_strategy_timeseries_backtest.py --root_dir ${root_dir} --model_name ${model_name} --model_dir ${model_dir} > ${log_dir}/${log_fname}.txt 2>&1 &
-done
-wait
-
-for model in ${model_dir}/xgb-${market}-minute60-${strategy_name}*; do
-    model_name="$(basename "$model")"
-    tmp="${model_name#*-*-}"
-    log_fname="${tmp%-*}"
-    echo ${model_dir}/${model_name}
-    python strategy_timeseries_backtest/07_strategy_timeseries_backtest.py --root_dir ${root_dir} --model_name ${model_name} --model_dir ${model_dir} > ${log_dir}/${log_fname}.txt 2>&1 &
-done
-wait
 
 best_model_name_dir=${root_dir}/var/best_model_name
 mkdir -p ${best_model_name_dir}
 
-strategy_timeseries_backtest/08_get_best_model_by_ts_backtest.py --log_dir ${log_dir} --interval day --strategy_name ${strategy_name} > ${best_model_name_dir}/${strategy_name}.day.txt
-strategy_timeseries_backtest/08_get_best_model_by_ts_backtest.py --log_dir ${log_dir} --interval minute240 --strategy_name ${strategy_name} > ${best_model_name_dir}/${strategy_name}.minute240.txt
-strategy_timeseries_backtest/08_get_best_model_by_ts_backtest.py --log_dir ${log_dir} --interval minute60 --strategy_name ${strategy_name} > ${best_model_name_dir}/${strategy_name}.minute60.txt
+python strategy_timeseries_backtest/08_get_best_model_by_ts_backtest.py --log_dir ${log_dir} --interval day --strategy_name ${strategy_name} > ${best_model_name_dir}/${strategy_name}.day.txt
+python strategy_timeseries_backtest/08_get_best_model_by_ts_backtest.py --log_dir ${log_dir} --interval minute240 --strategy_name ${strategy_name} > ${best_model_name_dir}/${strategy_name}.minute240.txt
+python strategy_timeseries_backtest/08_get_best_model_by_ts_backtest.py --log_dir ${log_dir} --interval minute60 --strategy_name ${strategy_name} > ${best_model_name_dir}/${strategy_name}.minute60.txt
