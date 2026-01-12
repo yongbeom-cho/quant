@@ -7,3 +7,7 @@ TODO: 03에서 필요한 기능들, 보조지표 추가할수 있는 기능 이�
 
 추출 condition 만족하는 signal의 수가 너무 작으면 그대로 04_strategy_timeseries_backtest 테스트
 그렇지 않고 꽤 많은경우에는 05, 06, 07, 08 진행
+
+TODO: best_model들이 시기가 겹치진 않는지 check (correlation test : 기존것과도 비교하도록)
+통과하면 최종 전략에 추가
+TODO: mdd가 상호 보완적인지 전략 혼합 test (전략별 weight) 
