@@ -146,8 +146,17 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
             }
         });
 
+        // volume과 volma가 모두 있으면 하나로 카운트
+        const hasVolume = independentIndicators.some(conf => conf.type === 'volume');
+        const hasVolma = independentIndicators.some(conf => conf.type === 'vol_sma' || conf.type === 'volma');
+        const volumeVolmaCount = (hasVolume && hasVolma) ? 1 : (hasVolume || hasVolma ? 1 : 0);
+        const otherIndicatorsCount = independentIndicators.filter(conf => 
+            conf.type !== 'volume' && conf.type !== 'vol_sma' && conf.type !== 'volma'
+        ).length;
+        
         // 동적 비율 계산: price는 항상 존재, 나머지 보조지표들이 추가될 때마다 비율 조정
-        const totalNonPriceIndicators = independentIndicators.length;
+        // volume과 volma는 같은 pane을 사용하므로 하나로 카운트
+        const totalNonPriceIndicators = volumeVolmaCount + otherIndicatorsCount;
         
         // price 비율 계산 (나머지 보조지표 개수에 따라 조정)
         // 보조지표가 추가될 때 각 보조지표가 최소 크기를 유지하도록 price 비율을 더 빠르게 줄임
@@ -288,6 +297,20 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
             }
         });
 
+        // volume과 volma가 같은 pane을 사용하도록 volumePaneId 추적
+        let volumePaneId = null;
+        let volumePaneIndex = null;
+        
+        // volume 또는 volma의 인덱스를 찾기
+        independentIndicators.forEach((conf, idx) => {
+            if (conf.type === 'volume' || conf.type === 'vol_sma' || conf.type === 'volma') {
+                if (volumePaneIndex === null) {
+                    volumePaneIndex = idx;
+                    volumePaneId = 'pane_VOL';
+                }
+            }
+        });
+
         // 2. 독립 보조지표들 (RSI, MFI, CCI, ATR, ADX, VOL, VOLMA) - 각각 고유한 priceScaleId 사용 (상단부터 순차 배치)
         independentIndicators.forEach((conf, idx) => {
             const baseOptions = { 
@@ -297,7 +320,11 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                 lastValueVisible: false 
             };
             // independentIndicators는 상단부터 배치 (인덱스 0부터)
-            const margins = calculateMargins(idx, totalNonPriceIndicators);
+            // volume과 volma는 같은 pane을 사용하므로 같은 인덱스 사용
+            const paneIndex = (conf.type === 'volume' || conf.type === 'vol_sma' || conf.type === 'volma') 
+                ? volumePaneIndex 
+                : idx;
+            const margins = calculateMargins(paneIndex, totalNonPriceIndicators);
             
             if (['rsi', 'mfi', 'cci'].includes(conf.type)) {
                 const key = `${conf.type.toUpperCase()}${conf.period}`;
@@ -360,7 +387,7 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     );
                 }
             } else if (conf.type === 'volume') {
-                const paneId = `pane_VOL`;
+                const paneId = volumePaneId;
                 const volData = data.filter(d => d.volume != null).map(d => ({
                     time: d.time,
                     value: d.volume,
@@ -382,17 +409,22 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                 }
             } else if (conf.type === 'vol_sma' || conf.type === 'volma') {
                 const key = `VOLMA${conf.period}`;
-                const paneId = `pane_${key}`;
+                const paneId = volumePaneId; // volume과 같은 pane 사용
                 const volmaData = data
                     .filter(d => d.volumes && d.volumes[key] != null && !Number.isNaN(d.volumes[key]))
                     .map(d => ({ time: d.time, value: d.volumes[key] }));
                 if (volmaData.length > 0) {
                     const s = chartRef.current.addSeries(LineSeries, { ...baseOptions, priceScaleId: paneId });
                     s.setData(volmaData);
-                    chartRef.current.priceScale(paneId).applyOptions({ 
-                        scaleMargins: margins,
-                        position: 'right'
-                    });
+                    // volume이 이미 priceScale을 설정했을 수 있으므로, 없을 때만 설정
+                    try {
+                        chartRef.current.priceScale(paneId).applyOptions({ 
+                            scaleMargins: margins,
+                            position: 'right'
+                        });
+                    } catch (e) {
+                        // 이미 설정되어 있으면 무시
+                    }
                     indicatorSeriesRef.current.push({ series: s, label: key });
                 }
             }
