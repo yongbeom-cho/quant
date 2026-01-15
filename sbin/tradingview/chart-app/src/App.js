@@ -155,11 +155,9 @@ function App() {
                             <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: '5px' }}>
                                 {ind.category === 'vol' ? (
                                     <>
-                                        <div />{/* volume은 period 인풋 숨김 */}
-                                        <select value={ind.width} onChange={e => updateIndicator(ind.id, 'width', parseInt(e.target.value))} style={miniSelect}>
-                                            {[1,2,3,4,5].map(w => <option key={w} value={w}>{w}px</option>)}
-                                        </select>
-                                        <input type="color" value={ind.color} onChange={e => updateIndicator(ind.id, 'color', e.target.value)} style={colorPicker} />
+                                        <div />{/* volume은 period, width, color 모두 숨김 */}
+                                        <div />
+                                        <div />
                                     </>
                                 ) : (
                                     <>
