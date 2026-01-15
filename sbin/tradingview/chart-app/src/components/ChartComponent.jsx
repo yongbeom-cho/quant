@@ -107,35 +107,63 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                 if (oscData.length > 0) {
                     const s = chartRef.current.addSeries(LineSeries, { ...baseOptions, priceScaleId: paneId });
                     s.setData(oscData);
-                    chartRef.current.priceScale(paneId).applyOptions({ scaleMargins: { top: 0.8, bottom: 0.05 } });
+                    chartRef.current.priceScale(paneId).applyOptions({ 
+                        scaleMargins: { top: 0.8, bottom: 0.05 },
+                        position: 'left'
+                    });
                     indicatorSeriesRef.current.push(s);
                 }
             } else if (conf.type === 'volume') {
-                const volData = data.filter(d => d.volume).map(d => ({
+                const volData = data.filter(d => d.volume != null).map(d => ({
                     time: d.time,
                     value: d.volume,
                     color: d.close >= d.open ? 'rgba(226, 16, 16, 0.6)' : 'rgba(0, 81, 255, 0.6)'
                 }));
                 if (volData.length > 0) {
-                    const s = chartRef.current.addSeries(HistogramSeries, { priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
+                    const s = chartRef.current.addSeries(HistogramSeries, { 
+                        priceFormat: { type: 'volume' }, 
+                        priceScaleId: 'vol',
+                        priceLineVisible: false,
+                        lastValueVisible: false
+                    });
                     s.setData(volData);
                     // volume 시리즈 추가 후 price scale 설정
-                    chartRef.current.priceScale('vol').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+                    chartRef.current.priceScale('vol').applyOptions({ 
+                        scaleMargins: { top: 0.8, bottom: 0 },
+                        position: 'left'
+                    });
                     indicatorSeriesRef.current.push(s);
                 }
             } else if (conf.type === 'vol_sma' || conf.type === 'volma') {
                 const key = `VOLMA${conf.period}`;
-                const volmaData = data.filter(d => d.volumes && d.volumes[key]).map(d => ({ time: d.time, value: d.volumes[key] }));
+                const volmaData = data
+                    .filter(d => d.volumes && d.volumes[key] != null)
+                    .map(d => ({ time: d.time, value: d.volumes[key] }));
                 if (volmaData.length > 0) {
-                    // vol price scale이 없으면 먼저 생성 (volume 시리즈가 없는 경우)
-                    try {
-                        chartRef.current.priceScale('vol');
-                    } catch (e) {
-                        // vol price scale이 없으면 더미 시리즈로 생성
-                        const dummyVol = chartRef.current.addSeries(HistogramSeries, { priceFormat: { type: 'volume' }, priceScaleId: 'vol', visible: false });
-                        dummyVol.setData([]);
-                        chartRef.current.priceScale('vol').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+                    // volma만 켠 경우에도 vol priceScale이 "항상" 존재하도록 보이지 않는 볼륨 히스토그램을 먼저 추가
+                    // (lightweight-charts는 series가 붙어야 해당 priceScaleId가 생성됨)
+                    const hiddenVolData = data
+                        .filter(d => d.volume != null)
+                        .map(d => ({
+                            time: d.time,
+                            value: d.volume,
+                            color: 'rgba(0,0,0,0)' // 완전 투명
+                        }));
+                    if (hiddenVolData.length > 0) {
+                        const hiddenVol = chartRef.current.addSeries(HistogramSeries, {
+                            priceFormat: { type: 'volume' },
+                            priceScaleId: 'vol',
+                            priceLineVisible: false,
+                            lastValueVisible: false
+                        });
+                        hiddenVol.setData(hiddenVolData);
+                        chartRef.current.priceScale('vol').applyOptions({ 
+                            scaleMargins: { top: 0.8, bottom: 0 },
+                            position: 'left'
+                        });
+                        indicatorSeriesRef.current.push(hiddenVol);
                     }
+
                     const s = chartRef.current.addSeries(LineSeries, { ...baseOptions, priceScaleId: 'vol' });
                     s.setData(volmaData);
                     indicatorSeriesRef.current.push(s);
@@ -147,7 +175,10 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                 if (atrData.length > 0) {
                     const s = chartRef.current.addSeries(LineSeries, { ...baseOptions, priceScaleId: paneId });
                     s.setData(atrData);
-                    chartRef.current.priceScale(paneId).applyOptions({ scaleMargins: { top: 0.8, bottom: 0.05 } });
+                    chartRef.current.priceScale(paneId).applyOptions({ 
+                        scaleMargins: { top: 0.8, bottom: 0.05 },
+                        position: 'left'
+                    });
                     indicatorSeriesRef.current.push(s);
                 }
             } else if (conf.type === 'psar') {
@@ -174,7 +205,10 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     sAdx.setData(adxData.map(d => ({ time: d.time, value: d.adxs[key].adx })));
                     sPlus.setData(adxData.map(d => ({ time: d.time, value: d.adxs[key].plus })));
                     sMinus.setData(adxData.map(d => ({ time: d.time, value: d.adxs[key].minus })));
-                    chartRef.current.priceScale(paneId).applyOptions({ scaleMargins: { top: 0.75, bottom: 0.05 } });
+                    chartRef.current.priceScale(paneId).applyOptions({ 
+                        scaleMargins: { top: 0.75, bottom: 0.05 },
+                        position: 'left'
+                    });
                     indicatorSeriesRef.current.push(sAdx, sPlus, sMinus);
                 }
             } else if (conf.type === 'donchian') {

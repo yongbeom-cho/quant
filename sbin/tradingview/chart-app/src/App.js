@@ -101,13 +101,26 @@ function App() {
             'mfi': { type: 'mfi', period: '14', color: '#4CAF50' },
             'cci': { type: 'cci', period: '20', color: '#FF9800' },
             'vol': { type: 'volume', period: '0', color: '#607D8B' },
-            'volma': { type: 'vol_sma', period: '20', color: '#607D8B' },
+            'volma': { type: 'volma', period: '20', color: '#607D8B' },
             'atr': { type: 'atr', period: '14', color: '#00BCD4' },
             'psar': { type: 'psar', period: '0', color: '#FFFFFF', width: 1 },
             'adx': { type: 'adx', period: '14', color: '#FFEB3B' },
             'dc': { type: 'donchian', period: '20', color: '#795548' }
         };
-        if (presets[category]) {
+
+        // MA는 누를 때마다 계속 추가
+        if (category === 'ma') {
+            if (presets[category]) {
+                setIndicators([...indicators, { ...base, ...presets[category] }]);
+            }
+            return;
+        }
+
+        // 나머지 보조지표는 토글 (있으면 제거, 없으면 추가)
+        const exists = indicators.some(ind => ind.category === category);
+        if (exists) {
+            setIndicators(indicators.filter(ind => ind.category !== category));
+        } else if (presets[category]) {
             setIndicators([...indicators, { ...base, ...presets[category] }]);
         }
     };
@@ -140,11 +153,23 @@ function App() {
                                 <button onClick={() => setIndicators(indicators.filter(i => i.id !== ind.id))} style={delBtn}>✕</button>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: '5px' }}>
-                                <input type="text" value={ind.period} onChange={e => updateIndicator(ind.id, 'period', e.target.value)} style={miniInput} />
-                                <select value={ind.width} onChange={e => updateIndicator(ind.id, 'width', parseInt(e.target.value))} style={miniSelect}>
-                                    {[1,2,3,4,5].map(w => <option key={w} value={w}>{w}px</option>)}
-                                </select>
-                                <input type="color" value={ind.color} onChange={e => updateIndicator(ind.id, 'color', e.target.value)} style={colorPicker} />
+                                {ind.category === 'vol' ? (
+                                    <>
+                                        <div />{/* volume은 period 인풋 숨김 */}
+                                        <select value={ind.width} onChange={e => updateIndicator(ind.id, 'width', parseInt(e.target.value))} style={miniSelect}>
+                                            {[1,2,3,4,5].map(w => <option key={w} value={w}>{w}px</option>)}
+                                        </select>
+                                        <input type="color" value={ind.color} onChange={e => updateIndicator(ind.id, 'color', e.target.value)} style={colorPicker} />
+                                    </>
+                                ) : (
+                                    <>
+                                        <input type="text" value={ind.period} onChange={e => updateIndicator(ind.id, 'period', e.target.value)} style={miniInput} />
+                                        <select value={ind.width} onChange={e => updateIndicator(ind.id, 'width', parseInt(e.target.value))} style={miniSelect}>
+                                            {[1,2,3,4,5].map(w => <option key={w} value={w}>{w}px</option>)}
+                                        </select>
+                                        <input type="color" value={ind.color} onChange={e => updateIndicator(ind.id, 'color', e.target.value)} style={colorPicker} />
+                                    </>
+                                )}
                             </div>
                         </div>
                     ))}
