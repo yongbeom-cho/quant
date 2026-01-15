@@ -29,6 +29,11 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
             priceLineVisible: false, lastValueVisible: false
         });
 
+        // 메인 가격 차트의 scaleMargins 설정 (하단에 여유 공간 확보)
+        chart.priceScale('right').applyOptions({
+            scaleMargins: { top: 0.1, bottom: 0.2 }
+        });
+
         candleSeriesRef.current = candleSeries;
         chartRef.current = chart;
 
@@ -128,8 +133,69 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
         indicatorSeriesRef.current.forEach(({ series }) => chartRef.current.removeSeries(series));
         indicatorSeriesRef.current = [];
 
-        // 보조지표 그리기
+        // 보조지표를 그룹별로 분류
+        const independentIndicators = [];
+        const priceIndicators = [];
+
         configs.forEach(conf => {
+            if (['sma', 'ema', 'wma', 'bollinger', 'ichimoku', 'psar', 'donchian'].includes(conf.type)) {
+                priceIndicators.push(conf);
+            } else {
+                // volume, volma, rsi, mfi, cci, atr, adx 등 모두 독립 보조지표로 처리
+                independentIndicators.push(conf);
+            }
+        });
+
+        // 동적 비율 계산: price는 항상 존재, 나머지 보조지표들이 추가될 때마다 비율 조정
+        const totalNonPriceIndicators = independentIndicators.length;
+        
+        // price 비율 계산 (나머지 보조지표 개수에 따라 조정)
+        // 보조지표가 추가될 때 각 보조지표가 최소 크기를 유지하도록 price 비율을 더 빠르게 줄임
+        let priceBottom = 0.1;
+        if (totalNonPriceIndicators === 0) {
+            priceBottom = 0.1; // price만 있을 때
+        } else if (totalNonPriceIndicators === 1) {
+            priceBottom = 0.3; // 보조지표 1개: price 70%, 보조지표 30%
+        } else if (totalNonPriceIndicators === 2) {
+            priceBottom = 0.4; // 보조지표 2개: price 60%, 각 보조지표 약 20%
+        } else if (totalNonPriceIndicators === 3) {
+            priceBottom = 0.45; // 보조지표 3개: price 55%, 각 보조지표 약 15%
+        } else if (totalNonPriceIndicators === 4) {
+            priceBottom = 0.5; // 보조지표 4개: price 50%, 각 보조지표 약 12.5%
+        } else if (totalNonPriceIndicators === 5) {
+            priceBottom = 0.55; // 보조지표 5개: price 45%, 각 보조지표 약 11%
+        } else {
+            priceBottom = 0.6; // 보조지표 6개 이상: price 40%, 각 보조지표 비율 분배
+        }
+
+        // price scaleMargins 업데이트 (캔들 차트는 항상 있음)
+        chartRef.current.priceScale('right').applyOptions({
+            scaleMargins: { top: 0.1, bottom: priceBottom }
+        });
+
+        
+        const calculateMargins = (index, total) => {
+            // 지표가 없을 경우 기본값
+            if (total === 0) return { top: 0.95, bottom: 0.05 };
+        
+            // priceBottom이 전체 가용 공간의 크기 (예: 0.3)
+            const availableSpace = priceBottom; 
+            
+            // 하나의 보조지표가 차지할 높이 (예: 0.3 / 2 = 0.15)
+            const indicatorHeight = availableSpace / total;
+        
+            // 상단(index 0)부터 순차 배치 계산
+            // index 0: top = 1 - 0.3 = 0.7,  bottom = 0.15 * (2 - 1 - 0) = 0.15
+            // index 1: top = 1 - 0.3 + 0.15 = 0.85, bottom = 0.15 * (2 - 1 - 1) = 0.0
+            
+            const top = (1 - availableSpace) + (index * indicatorHeight);
+            const bottom = indicatorHeight * (total - 1 - index);
+        
+            return { top, bottom };
+        };
+
+        // 1. Price 그룹 지표들 (MA, BB, ICHI, PSAR, DC) - priceScaleId 없이 기본 'right' 사용
+        priceIndicators.forEach(conf => {
             const baseOptions = { 
                 color: conf.color, 
                 lineWidth: conf.width || 2, 
@@ -185,91 +251,6 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                         { series: sb, label: `${key}_SB` }
                     );
                 }
-            } else if (['rsi', 'mfi', 'cci'].includes(conf.type)) {
-                const key = `${conf.type.toUpperCase()}${conf.period}`;
-                const paneId = `pane_${key}`;
-                const oscData = data
-                    .filter(d => d.oscillators && d.oscillators[key] != null && !Number.isNaN(d.oscillators[key]))
-                    .map(d => ({ time: d.time, value: d.oscillators[key] }));
-                if (oscData.length > 0) {
-                    const s = chartRef.current.addSeries(LineSeries, { ...baseOptions, priceScaleId: paneId });
-                    s.setData(oscData);
-                    chartRef.current.priceScale(paneId).applyOptions({ 
-                        scaleMargins: { top: 0.8, bottom: 0.05 },
-                        position: 'left'
-                    });
-                    indicatorSeriesRef.current.push({ series: s, label: key });
-                }
-            } else if (conf.type === 'volume') {
-                const volData = data.filter(d => d.volume != null).map(d => ({
-                    time: d.time,
-                    value: d.volume,
-                    color: d.close >= d.open ? 'rgba(226, 16, 16, 0.6)' : 'rgba(0, 81, 255, 0.6)'
-                }));
-                if (volData.length > 0) {
-                    const s = chartRef.current.addSeries(HistogramSeries, { 
-                        priceFormat: { type: 'volume' }, 
-                        priceScaleId: 'vol',
-                        priceLineVisible: false,
-                        lastValueVisible: false
-                    });
-                    s.setData(volData);
-                    // volume 시리즈 추가 후 price scale 설정
-                    chartRef.current.priceScale('vol').applyOptions({ 
-                        scaleMargins: { top: 0.8, bottom: 0 },
-                        position: 'left'
-                    });
-                    indicatorSeriesRef.current.push({ series: s, label: 'VOL' });
-                }
-            } else if (conf.type === 'vol_sma' || conf.type === 'volma') {
-                const key = `VOLMA${conf.period}`;
-                const volmaData = data
-                    .filter(d => d.volumes && d.volumes[key] != null && !Number.isNaN(d.volumes[key]))
-                    .map(d => ({ time: d.time, value: d.volumes[key] }));
-                if (volmaData.length > 0) {
-                    // volma만 켠 경우에도 vol priceScale이 "항상" 존재하도록 보이지 않는 볼륨 히스토그램을 먼저 추가
-                    // (lightweight-charts는 series가 붙어야 해당 priceScaleId가 생성됨)
-                    const hiddenVolData = data
-                        .filter(d => d.volume != null)
-                        .map(d => ({
-                            time: d.time,
-                            value: d.volume,
-                            color: 'rgba(0,0,0,0)' // 완전 투명
-                        }));
-                    if (hiddenVolData.length > 0) {
-                        const hiddenVol = chartRef.current.addSeries(HistogramSeries, {
-                            priceFormat: { type: 'volume' },
-                            priceScaleId: 'vol',
-                            priceLineVisible: false,
-                            lastValueVisible: false
-                        });
-                        hiddenVol.setData(hiddenVolData);
-                        chartRef.current.priceScale('vol').applyOptions({ 
-                            scaleMargins: { top: 0.8, bottom: 0 },
-                            position: 'left'
-                        });
-                        indicatorSeriesRef.current.push({ series: hiddenVol, label: 'VOL(hidden)' });
-                    }
-
-                    const s = chartRef.current.addSeries(LineSeries, { ...baseOptions, priceScaleId: 'vol' });
-                    s.setData(volmaData);
-                    indicatorSeriesRef.current.push({ series: s, label: key });
-                }
-            } else if (conf.type === 'atr') {
-                const key = `ATR${conf.period}`;
-                const paneId = `pane_${key}`;
-                const atrData = data
-                    .filter(d => d.atrs && d.atrs[key] != null && !Number.isNaN(d.atrs[key]))
-                    .map(d => ({ time: d.time, value: d.atrs[key] }));
-                if (atrData.length > 0) {
-                    const s = chartRef.current.addSeries(LineSeries, { ...baseOptions, priceScaleId: paneId });
-                    s.setData(atrData);
-                    chartRef.current.priceScale(paneId).applyOptions({ 
-                        scaleMargins: { top: 0.8, bottom: 0.05 },
-                        position: 'left'
-                    });
-                    indicatorSeriesRef.current.push({ series: s, label: key });
-                }
             } else if (conf.type === 'psar') {
                 const psarData = data
                     .filter(d => d.psars && d.psars['PSAR'] != null && !Number.isNaN(d.psars['PSAR']))
@@ -284,6 +265,69 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     });
                     s.setData(psarData);
                     indicatorSeriesRef.current.push({ series: s, label: 'PSAR' });
+                }
+            } else if (conf.type === 'donchian') {
+                const key = `DC${conf.period}`;
+                const dcData = data.filter(d => d.donchians && d.donchians[key]);
+                if (dcData.length > 0) {
+                    const up = chartRef.current.addSeries(LineSeries, baseOptions);
+                    const lo = chartRef.current.addSeries(LineSeries, baseOptions);
+                    const upData = dcData
+                        .filter(d => d.donchians[key].up != null && !Number.isNaN(d.donchians[key].up))
+                        .map(d => ({ time: d.time, value: d.donchians[key].up }));
+                    const loData = dcData
+                        .filter(d => d.donchians[key].lo != null && !Number.isNaN(d.donchians[key].lo))
+                        .map(d => ({ time: d.time, value: d.donchians[key].lo }));
+                    up.setData(upData);
+                    lo.setData(loData);
+                    indicatorSeriesRef.current.push(
+                        { series: up, label: `${key}_UP` },
+                        { series: lo, label: `${key}_LO` },
+                    );
+                }
+            }
+        });
+
+        // 2. 독립 보조지표들 (RSI, MFI, CCI, ATR, ADX, VOL, VOLMA) - 각각 고유한 priceScaleId 사용 (상단부터 순차 배치)
+        independentIndicators.forEach((conf, idx) => {
+            const baseOptions = { 
+                color: conf.color, 
+                lineWidth: conf.width || 2, 
+                priceLineVisible: false, 
+                lastValueVisible: false 
+            };
+            // independentIndicators는 상단부터 배치 (인덱스 0부터)
+            const margins = calculateMargins(idx, totalNonPriceIndicators);
+            
+            if (['rsi', 'mfi', 'cci'].includes(conf.type)) {
+                const key = `${conf.type.toUpperCase()}${conf.period}`;
+                const paneId = `pane_${key}`;
+                const oscData = data
+                    .filter(d => d.oscillators && d.oscillators[key] != null && !Number.isNaN(d.oscillators[key]))
+                    .map(d => ({ time: d.time, value: d.oscillators[key] }));
+                if (oscData.length > 0) {
+                    const s = chartRef.current.addSeries(LineSeries, { ...baseOptions, priceScaleId: paneId });
+                    s.setData(oscData);
+                    chartRef.current.priceScale(paneId).applyOptions({ 
+                        scaleMargins: margins,
+                        position: 'right'
+                    });
+                    indicatorSeriesRef.current.push({ series: s, label: key });
+                }
+            } else if (conf.type === 'atr') {
+                const key = `ATR${conf.period}`;
+                const paneId = `pane_${key}`;
+                const atrData = data
+                    .filter(d => d.atrs && d.atrs[key] != null && !Number.isNaN(d.atrs[key]))
+                    .map(d => ({ time: d.time, value: d.atrs[key] }));
+                if (atrData.length > 0) {
+                    const s = chartRef.current.addSeries(LineSeries, { ...baseOptions, priceScaleId: paneId });
+                    s.setData(atrData);
+                    chartRef.current.priceScale(paneId).applyOptions({ 
+                        scaleMargins: margins,
+                        position: 'right'
+                    });
+                    indicatorSeriesRef.current.push({ series: s, label: key });
                 }
             } else if (conf.type === 'adx') {
                 const key = `ADX${conf.period}`;
@@ -306,8 +350,8 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     sPlus.setData(plusLineData);
                     sMinus.setData(minusLineData);
                     chartRef.current.priceScale(paneId).applyOptions({ 
-                        scaleMargins: { top: 0.75, bottom: 0.05 },
-                        position: 'left'
+                        scaleMargins: margins,
+                        position: 'right'
                     });
                     indicatorSeriesRef.current.push(
                         { series: sAdx, label: key },
@@ -315,24 +359,41 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                         { series: sMinus, label: `${key}_MINUS` },
                     );
                 }
-            } else if (conf.type === 'donchian') {
-                const key = `DC${conf.period}`;
-                const dcData = data.filter(d => d.donchians && d.donchians[key]);
-                if (dcData.length > 0) {
-                    const up = chartRef.current.addSeries(LineSeries, baseOptions);
-                    const lo = chartRef.current.addSeries(LineSeries, baseOptions);
-                    const upData = dcData
-                        .filter(d => d.donchians[key].up != null && !Number.isNaN(d.donchians[key].up))
-                        .map(d => ({ time: d.time, value: d.donchians[key].up }));
-                    const loData = dcData
-                        .filter(d => d.donchians[key].lo != null && !Number.isNaN(d.donchians[key].lo))
-                        .map(d => ({ time: d.time, value: d.donchians[key].lo }));
-                    up.setData(upData);
-                    lo.setData(loData);
-                    indicatorSeriesRef.current.push(
-                        { series: up, label: `${key}_UP` },
-                        { series: lo, label: `${key}_LO` },
-                    );
+            } else if (conf.type === 'volume') {
+                const paneId = `pane_VOL`;
+                const volData = data.filter(d => d.volume != null).map(d => ({
+                    time: d.time,
+                    value: d.volume,
+                    color: d.close >= d.open ? 'rgba(226, 16, 16, 0.6)' : 'rgba(0, 81, 255, 0.6)'
+                }));
+                if (volData.length > 0) {
+                    const s = chartRef.current.addSeries(HistogramSeries, { 
+                        priceFormat: { type: 'volume' }, 
+                        priceScaleId: paneId,
+                        priceLineVisible: false,
+                        lastValueVisible: false
+                    });
+                    s.setData(volData);
+                    chartRef.current.priceScale(paneId).applyOptions({ 
+                        scaleMargins: margins,
+                        position: 'right'
+                    });
+                    indicatorSeriesRef.current.push({ series: s, label: 'VOL' });
+                }
+            } else if (conf.type === 'vol_sma' || conf.type === 'volma') {
+                const key = `VOLMA${conf.period}`;
+                const paneId = `pane_${key}`;
+                const volmaData = data
+                    .filter(d => d.volumes && d.volumes[key] != null && !Number.isNaN(d.volumes[key]))
+                    .map(d => ({ time: d.time, value: d.volumes[key] }));
+                if (volmaData.length > 0) {
+                    const s = chartRef.current.addSeries(LineSeries, { ...baseOptions, priceScaleId: paneId });
+                    s.setData(volmaData);
+                    chartRef.current.priceScale(paneId).applyOptions({ 
+                        scaleMargins: margins,
+                        position: 'right'
+                    });
+                    indicatorSeriesRef.current.push({ series: s, label: key });
                 }
             }
         });
