@@ -11,6 +11,9 @@ root_dir=""
 market="coin"
 interval="day"
 processes=""
+ticker=""
+commision_fee="0.0005"
+slippage_fee="0.002"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -28,6 +31,18 @@ while [[ $# -gt 0 ]]; do
       ;;
     --processes)
       processes="$2"
+      shift 2
+      ;;
+    --ticker)
+      ticker="$2"
+      shift 2
+      ;;
+    --commision_fee)
+      commision_fee="$2"
+      shift 2
+      ;;
+    --slippage_fee)
+      slippage_fee="$2"
       shift 2
       ;;
     *)
@@ -49,6 +64,10 @@ cmd="python ${root_dir}/sbin/strategy_unit_backtest/022_vbt_backtest.py --root_d
 if [ ! -z "$processes" ]; then
     cmd="$cmd --processes $processes"
 fi
+if [ ! -z "$ticker" ]; then
+    cmd="$cmd --ticker $ticker"
+fi
+cmd="$cmd --commision_fee $commision_fee --slippage_fee $slippage_fee"
 
 $cmd > "${root_dir}/sbin/log_022_vbt_test_${market}_${interval}.txt" 2>&1
 
