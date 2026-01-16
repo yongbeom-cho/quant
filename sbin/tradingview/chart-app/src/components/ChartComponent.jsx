@@ -187,6 +187,9 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
             // 지표가 없을 경우 기본값
             if (total === 0) return { top: 0.95, bottom: 0.05 };
         
+            // index가 범위를 벗어나지 않도록 보정
+            const safeIndex = Math.max(0, Math.min(index, total - 1));
+        
             // priceBottom이 전체 가용 공간의 크기 (예: 0.3)
             const availableSpace = priceBottom; 
             
@@ -197,10 +200,14 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
             // index 0: top = 1 - 0.3 = 0.7,  bottom = 0.15 * (2 - 1 - 0) = 0.15
             // index 1: top = 1 - 0.3 + 0.15 = 0.85, bottom = 0.15 * (2 - 1 - 1) = 0.0
             
-            const top = (1 - availableSpace) + (index * indicatorHeight);
-            const bottom = indicatorHeight * (total - 1 - index);
+            const top = (1 - availableSpace) + (safeIndex * indicatorHeight);
+            const bottom = indicatorHeight * (total - 1 - safeIndex);
         
-            return { top, bottom };
+            // bottom이 음수가 되지 않도록 보정
+            return { 
+                top: Math.max(0, Math.min(1, top)), 
+                bottom: Math.max(0, Math.min(1, bottom)) 
+            };
         };
 
         // 1. Price 그룹 지표들 (MA, BB, ICHI, PSAR, DC) - priceScaleId 없이 기본 'right' 사용
@@ -312,6 +319,10 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
         });
 
         // 2. 독립 보조지표들 (RSI, MFI, CCI, ATR, ADX, VOL, VOLMA) - 각각 고유한 priceScaleId 사용 (상단부터 순차 배치)
+        // 실제 pane 인덱스를 추적 (volume/volma는 하나로 카운트)
+        let actualPaneIndex = 0;
+        let volumePaneAssigned = false;
+        
         independentIndicators.forEach((conf, idx) => {
             const baseOptions = { 
                 color: conf.color, 
@@ -319,12 +330,44 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                 priceLineVisible: false, 
                 lastValueVisible: false 
             };
-            // independentIndicators는 상단부터 배치 (인덱스 0부터)
-            // volume과 volma는 같은 pane을 사용하므로 같은 인덱스 사용
-            const paneIndex = (conf.type === 'volume' || conf.type === 'vol_sma' || conf.type === 'volma') 
-                ? volumePaneIndex 
-                : idx;
+            
+            // paneIndex 계산: volume과 volma는 같은 pane을 사용
+            let paneIndex;
+            if (conf.type === 'volume' || conf.type === 'vol_sma' || conf.type === 'volma') {
+                if (!volumePaneAssigned) {
+                    // volume/volma의 첫 번째 항목이 실제 pane 인덱스 결정
+                    paneIndex = actualPaneIndex;
+                    volumePaneAssigned = true;
+                    actualPaneIndex++; // volume/volma pane 할당 후 다음 pane으로
+                } else {
+                    // volma는 volume과 같은 pane 사용 (actualPaneIndex 증가 안 함)
+                    paneIndex = actualPaneIndex - 1; // 이전 pane 인덱스 사용
+                }
+            } else {
+                // volume/volma가 아닌 지표는 순차적으로 pane 인덱스 할당
+                paneIndex = actualPaneIndex;
+                actualPaneIndex++;
+            }
+            
+            // paneIndex가 범위를 벗어나지 않도록 보정
+            if (paneIndex >= totalNonPriceIndicators) {
+                paneIndex = Math.max(0, totalNonPriceIndicators - 1);
+            }
+            
+            // bottom margin이 음수가 되지 않도록 보정
             const margins = calculateMargins(paneIndex, totalNonPriceIndicators);
+            if (margins.bottom < 0) {
+                margins.bottom = 0;
+            }
+            if (margins.top < 0) {
+                margins.top = 0;
+            }
+            if (margins.top > 1) {
+                margins.top = 1;
+            }
+            if (margins.bottom > 1) {
+                margins.bottom = 1;
+            }
             
             if (['rsi', 'mfi', 'cci'].includes(conf.type)) {
                 const key = `${conf.type.toUpperCase()}${conf.period}`;
