@@ -229,6 +229,7 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
             // 지표가 없을 경우 기본값
             if (total === 0) return { top: 0.95, bottom: 0.05 };
         
+            const margin = 0.015;
             // index가 범위를 벗어나지 않도록 보정
             const safeIndex = Math.max(0, Math.min(index, total - 1));
         
@@ -242,8 +243,8 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
             // index 0: top = 1 - 0.3 = 0.7,  bottom = 0.15 * (2 - 1 - 0) = 0.15
             // index 1: top = 1 - 0.3 + 0.15 = 0.85, bottom = 0.15 * (2 - 1 - 1) = 0.0
             
-            const top = (1 - availableSpace) + (safeIndex * indicatorHeight);
-            const bottom = indicatorHeight * (total - 1 - safeIndex);
+            const top = (1 - availableSpace) + (safeIndex * indicatorHeight) + margin;
+            const bottom = indicatorHeight * (total - 1 - safeIndex) + margin;
         
             // bottom이 음수가 되지 않도록 보정
             return { 
