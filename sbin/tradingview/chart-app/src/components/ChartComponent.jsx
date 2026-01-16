@@ -6,9 +6,10 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
     const chartRef = useRef();
     const candleSeriesRef = useRef();
     // 각 보조지표 라인/시리즈와 레이블 정보를 함께 저장
-    const indicatorSeriesRef = useRef([]); // [{ series, label }]
+    const indicatorSeriesRef = useRef([]); // [{ series, label, priceScaleId? }]
     const firstTimeRef = useRef(null);
     const [hoverInfo, setHoverInfo] = useState(null);
+    const [crosshairPosition, setCrosshairPosition] = useState(null);
     
     // 부모의 onLoadMore를 최신 상태로 참조하기 위함
     const onLoadMoreRef = useRef(onLoadMore);
@@ -53,12 +54,14 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
         const handleCrosshairMove = (param) => {
             if (!param || !param.time || !param.point || !chartRef.current) {
                 setHoverInfo(null);
+                setCrosshairPosition(null);
                 return;
             }
 
             // 차트 영역 밖이면 표시하지 않음
             if (param.point.x < 0 || param.point.y < 0) {
                 setHoverInfo(null);
+                setCrosshairPosition(null);
                 return;
             }
 
@@ -68,17 +71,34 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
             const indicators = [];
             const pricesMap = param.seriesPrices;
 
-            indicatorSeriesRef.current.forEach(({ series, label }) => {
+            indicatorSeriesRef.current.forEach(({ series, label, priceScaleId }) => {
                 if (!series || !label) return;
                 let value = undefined;
                 if (pricesMap && typeof pricesMap.get === 'function') {
                     value = pricesMap.get(series);
                 } else if (seriesDataMap && typeof seriesDataMap.get === 'function') {
                     const d = seriesDataMap.get(series);
-                    if (d && typeof d.value === 'number') value = d.value;
+                    // 시리즈 타입별로 값 추출
+                    if (d && typeof d.value === 'number') {
+                        value = d.value;
+                    } else if (d && typeof d.close === 'number') {
+                        value = d.close; // candlestick
+                    }
                 }
                 if (value != null && !Number.isNaN(value)) {
-                    indicators.push({ label, value });
+                    // 각 시리즈 객체에서 직접 priceToCoordinate 호출
+                    let yPos = null;
+                    try {
+                        if (series && typeof series.priceToCoordinate === 'function') {
+                            const coord = series.priceToCoordinate(value);
+                            if (coord !== null && coord !== undefined && !isNaN(coord) && isFinite(coord)) {
+                                yPos = coord;
+                            }
+                        }
+                    } catch (e) {
+                        // 계산 실패 시 무시
+                    }
+                    indicators.push({ label, value, priceScaleId, yPos });
                 }
             });
 
@@ -92,11 +112,27 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                 timeLabel = `${t.year}-${String(t.month).padStart(2, '0')}-${String(t.day).padStart(2, '0')}`;
             }
 
+            // OHLC의 yPos 계산 (close 값을 사용)
+            let candleYPos = null;
+            if (candleData && candleData.close != null && !Number.isNaN(candleData.close) && candleSeriesRef.current) {
+                try {
+                    if (typeof candleSeriesRef.current.priceToCoordinate === 'function') {
+                        const coord = candleSeriesRef.current.priceToCoordinate(candleData.close);
+                        if (coord !== null && coord !== undefined && !isNaN(coord) && isFinite(coord)) {
+                            candleYPos = coord;
+                        }
+                    }
+                } catch (e) {
+                    // 계산 실패 시 무시
+                }
+            }
+
             setHoverInfo({
                 time: timeLabel,
-                candle: candleData || null,
+                candle: candleData ? { ...candleData, yPos: candleYPos } : null,
                 indicators,
             });
+            setCrosshairPosition({ x: param.point.x, y: param.point.y });
         };
         chart.subscribeCrosshairMove(handleCrosshairMove);
 
@@ -132,8 +168,8 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
 
             // 기존 보조지표를 Map으로 관리 (label -> series)하여 재사용
             const existingSeriesMap = new Map();
-            indicatorSeriesRef.current.forEach(({ series, label }) => {
-                existingSeriesMap.set(label, series);
+            indicatorSeriesRef.current.forEach(({ series, label, priceScaleId }) => {
+                existingSeriesMap.set(label, { series, priceScaleId });
             });
             
             // indicatorSeriesRef를 초기화하여 중복 방지
@@ -145,17 +181,19 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
             // 시리즈를 재사용하거나 새로 추가하는 헬퍼 함수
             const getOrCreateSeries = (label, seriesType, options) => {
                 usedLabels.add(label);
-                let series = existingSeriesMap.get(label);
+                const existing = existingSeriesMap.get(label);
+                let series = existing ? existing.series : null;
+                const priceScaleId = options.priceScaleId || null;
                 if (series) {
                     try {
                         // 기존 시리즈 재사용 - 옵션 업데이트만 수행
                         // priceScaleId는 시리즈 생성 시에만 설정 가능하므로 변경 불가
                         // 옵션에서 priceScaleId 제외하고 업데이트
-                        const { priceScaleId, ...updateOptions } = options;
+                        const { priceScaleId: _, ...updateOptions } = options;
                         if (Object.keys(updateOptions).length > 0) {
                             series.applyOptions(updateOptions);
                         }
-                        return series;
+                        return { series, priceScaleId: existing.priceScaleId || priceScaleId };
                     } catch (e) {
                         // 시리즈가 유효하지 않으면 재생성
                         try {
@@ -164,14 +202,14 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                             // 이미 제거되었을 수 있음
                         }
                         series = chartRef.current.addSeries(seriesType, options);
-                        existingSeriesMap.set(label, series);
-                        return series;
+                        existingSeriesMap.set(label, { series, priceScaleId });
+                        return { series, priceScaleId };
                     }
                 } else {
                     // 새 시리즈 추가
                     series = chartRef.current.addSeries(seriesType, options);
-                    existingSeriesMap.set(label, series);
-                    return series;
+                    existingSeriesMap.set(label, { series, priceScaleId });
+                    return { series, priceScaleId };
                 }
             };
 
@@ -268,16 +306,16 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     .filter(d => d.mas && d.mas[key] != null && !Number.isNaN(d.mas[key]))
                     .map(d => ({ time: d.time, value: d.mas[key] }));
                 if (lineData.length > 0) {
-                    const s = getOrCreateSeries(key, LineSeries, baseOptions);
+                    const { series: s, priceScaleId } = getOrCreateSeries(key, LineSeries, baseOptions);
                     s.setData(lineData);
-                    indicatorSeriesRef.current.push({ series: s, label: key });
+                    indicatorSeriesRef.current.push({ series: s, label: key, priceScaleId });
                 }
             } else if (conf.type === 'bollinger') {
                 const key = `BB${conf.period}`;
                 const bbData = data.filter(d => d.bbs && d.bbs[key]);
                 if (bbData.length > 0) {
-                    const up = getOrCreateSeries(`${key}_UP`, LineSeries, baseOptions);
-                    const lo = getOrCreateSeries(`${key}_DN`, LineSeries, baseOptions);
+                    const { series: up, priceScaleId: upPriceScaleId } = getOrCreateSeries(`${key}_UP`, LineSeries, baseOptions);
+                    const { series: lo, priceScaleId: loPriceScaleId } = getOrCreateSeries(`${key}_DN`, LineSeries, baseOptions);
                     const upData = bbData
                         .filter(d => d.bbs[key].up != null && !Number.isNaN(d.bbs[key].up))
                         .map(d => ({ time: d.time, value: d.bbs[key].up }));
@@ -287,16 +325,16 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     up.setData(upData);
                     lo.setData(loData);
                     indicatorSeriesRef.current.push(
-                        { series: up, label: `${key}_UP` },
-                        { series: lo, label: `${key}_DN` }
+                        { series: up, label: `${key}_UP`, priceScaleId: upPriceScaleId },
+                        { series: lo, label: `${key}_DN`, priceScaleId: loPriceScaleId }
                     );
                 }
             } else if (conf.type === 'ichimoku') {
                 const key = `ICHI${conf.period.replace(/,/g, '_')}`;
                 const ichiData = data.filter(d => d.ichis && d.ichis[key]);
                 if (ichiData.length > 0) {
-                    const sa = getOrCreateSeries(`${key}_SA`, LineSeries, baseOptions);
-                    const sb = getOrCreateSeries(`${key}_SB`, LineSeries, { ...baseOptions, color: conf.color + '80' });
+                    const { series: sa, priceScaleId: saPriceScaleId } = getOrCreateSeries(`${key}_SA`, LineSeries, baseOptions);
+                    const { series: sb, priceScaleId: sbPriceScaleId } = getOrCreateSeries(`${key}_SB`, LineSeries, { ...baseOptions, color: conf.color + '80' });
                     const saData = ichiData
                         .filter(d => d.ichis[key].sa != null && !Number.isNaN(d.ichis[key].sa))
                         .map(d => ({ time: d.time, value: d.ichis[key].sa }));
@@ -306,8 +344,8 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     sa.setData(saData);
                     sb.setData(sbData);
                     indicatorSeriesRef.current.push(
-                        { series: sa, label: `${key}_SA` },
-                        { series: sb, label: `${key}_SB` }
+                        { series: sa, label: `${key}_SA`, priceScaleId: saPriceScaleId },
+                        { series: sb, label: `${key}_SB`, priceScaleId: sbPriceScaleId }
                     );
                 }
             } else if (conf.type === 'psar') {
@@ -315,7 +353,7 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     .filter(d => d.psars && d.psars['PSAR'] != null && !Number.isNaN(d.psars['PSAR']))
                     .map(d => ({ time: d.time, value: d.psars['PSAR'] }));
                 if (psarData.length > 0) {
-                    const s = getOrCreateSeries('PSAR', LineSeries, { 
+                    const { series: s, priceScaleId } = getOrCreateSeries('PSAR', LineSeries, { 
                         ...baseOptions, 
                         lineStyle: 2, 
                         lineWidth: 0, 
@@ -323,14 +361,14 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                         markerSize: 3
                     });
                     s.setData(psarData);
-                    indicatorSeriesRef.current.push({ series: s, label: 'PSAR' });
+                    indicatorSeriesRef.current.push({ series: s, label: 'PSAR', priceScaleId });
                 }
             } else if (conf.type === 'donchian') {
                 const key = `DC${conf.period}`;
                 const dcData = data.filter(d => d.donchians && d.donchians[key]);
                 if (dcData.length > 0) {
-                    const up = getOrCreateSeries(`${key}_UP`, LineSeries, baseOptions);
-                    const lo = getOrCreateSeries(`${key}_LO`, LineSeries, baseOptions);
+                    const { series: up, priceScaleId: upPriceScaleId } = getOrCreateSeries(`${key}_UP`, LineSeries, baseOptions);
+                    const { series: lo, priceScaleId: loPriceScaleId } = getOrCreateSeries(`${key}_LO`, LineSeries, baseOptions);
                     const upData = dcData
                         .filter(d => d.donchians[key].up != null && !Number.isNaN(d.donchians[key].up))
                         .map(d => ({ time: d.time, value: d.donchians[key].up }));
@@ -340,8 +378,8 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     up.setData(upData);
                     lo.setData(loData);
                     indicatorSeriesRef.current.push(
-                        { series: up, label: `${key}_UP` },
-                        { series: lo, label: `${key}_LO` },
+                        { series: up, label: `${key}_UP`, priceScaleId: upPriceScaleId },
+                        { series: lo, label: `${key}_LO`, priceScaleId: loPriceScaleId },
                     );
                 }
             }
@@ -410,13 +448,13 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     .filter(d => d.oscillators && d.oscillators[key] != null && !Number.isNaN(d.oscillators[key]))
                     .map(d => ({ time: d.time, value: d.oscillators[key] }));
                 if (oscData.length > 0) {
-                    const s = getOrCreateSeries(key, LineSeries, { ...baseOptions, priceScaleId: paneId });
+                    const { series: s, priceScaleId } = getOrCreateSeries(key, LineSeries, { ...baseOptions, priceScaleId: paneId });
                     s.setData(oscData);
                     chartRef.current.priceScale(paneId).applyOptions({ 
                         scaleMargins: margins,
                         position: 'right'
                     });
-                    indicatorSeriesRef.current.push({ series: s, label: key });
+                    indicatorSeriesRef.current.push({ series: s, label: key, priceScaleId });
                 }
             } else if (conf.type === 'atr') {
                 const key = `ATR${conf.period}`;
@@ -425,22 +463,22 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     .filter(d => d.atrs && d.atrs[key] != null && !Number.isNaN(d.atrs[key]))
                     .map(d => ({ time: d.time, value: d.atrs[key] }));
                 if (atrData.length > 0) {
-                    const s = getOrCreateSeries(key, LineSeries, { ...baseOptions, priceScaleId: paneId });
+                    const { series: s, priceScaleId } = getOrCreateSeries(key, LineSeries, { ...baseOptions, priceScaleId: paneId });
                     s.setData(atrData);
                     chartRef.current.priceScale(paneId).applyOptions({ 
                         scaleMargins: margins,
                         position: 'right'
                     });
-                    indicatorSeriesRef.current.push({ series: s, label: key });
+                    indicatorSeriesRef.current.push({ series: s, label: key, priceScaleId });
                 }
             } else if (conf.type === 'adx') {
                 const key = `ADX${conf.period}`;
                 const paneId = `pane_${key}`;
                 const adxData = data.filter(d => d.adxs && d.adxs[key]);
                 if (adxData.length > 0) {
-                    const sAdx = getOrCreateSeries(key, LineSeries, { ...baseOptions, priceScaleId: paneId });
-                    const sPlus = getOrCreateSeries(`${key}_PLUS`, LineSeries, { ...baseOptions, color: '#4CAF50', lineWidth: 1, priceScaleId: paneId });
-                    const sMinus = getOrCreateSeries(`${key}_MINUS`, LineSeries, { ...baseOptions, color: '#F44336', lineWidth: 1, priceScaleId: paneId });
+                    const { series: sAdx, priceScaleId: adxPriceScaleId } = getOrCreateSeries(key, LineSeries, { ...baseOptions, priceScaleId: paneId });
+                    const { series: sPlus, priceScaleId: plusPriceScaleId } = getOrCreateSeries(`${key}_PLUS`, LineSeries, { ...baseOptions, color: '#4CAF50', lineWidth: 1, priceScaleId: paneId });
+                    const { series: sMinus, priceScaleId: minusPriceScaleId } = getOrCreateSeries(`${key}_MINUS`, LineSeries, { ...baseOptions, color: '#F44336', lineWidth: 1, priceScaleId: paneId });
                     const adxLineData = adxData
                         .filter(d => d.adxs[key].adx != null && !Number.isNaN(d.adxs[key].adx))
                         .map(d => ({ time: d.time, value: d.adxs[key].adx }));
@@ -458,9 +496,9 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                         position: 'right'
                     });
                     indicatorSeriesRef.current.push(
-                        { series: sAdx, label: key },
-                        { series: sPlus, label: `${key}_PLUS` },
-                        { series: sMinus, label: `${key}_MINUS` },
+                        { series: sAdx, label: key, priceScaleId: adxPriceScaleId },
+                        { series: sPlus, label: `${key}_PLUS`, priceScaleId: plusPriceScaleId },
+                        { series: sMinus, label: `${key}_MINUS`, priceScaleId: minusPriceScaleId },
                     );
                 }
             } else if (conf.type === 'volume') {
@@ -471,7 +509,7 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     color: d.close >= d.open ? 'rgba(226, 16, 16, 0.6)' : 'rgba(0, 81, 255, 0.6)'
                 }));
                 if (volData.length > 0) {
-                    const s = getOrCreateSeries('VOL', HistogramSeries, { 
+                    const { series: s, priceScaleId } = getOrCreateSeries('VOL', HistogramSeries, { 
                         priceFormat: { type: 'volume' }, 
                         priceScaleId: paneId,
                         priceLineVisible: false,
@@ -482,7 +520,7 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                         scaleMargins: margins,
                         position: 'right'
                     });
-                    indicatorSeriesRef.current.push({ series: s, label: 'VOL' });
+                    indicatorSeriesRef.current.push({ series: s, label: 'VOL', priceScaleId });
                 }
             } else if (conf.type === 'vol_sma' || conf.type === 'volma') {
                 const key = `VOLMA${conf.period}`;
@@ -491,7 +529,7 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     .filter(d => d.volumes && d.volumes[key] != null && !Number.isNaN(d.volumes[key]))
                     .map(d => ({ time: d.time, value: d.volumes[key] }));
                 if (volmaData.length > 0) {
-                    const s = getOrCreateSeries(key, LineSeries, { ...baseOptions, priceScaleId: paneId });
+                    const { series: s, priceScaleId } = getOrCreateSeries(key, LineSeries, { ...baseOptions, priceScaleId: paneId });
                     s.setData(volmaData);
                     // volume이 이미 priceScale을 설정했을 수 있으므로, 없을 때만 설정
                     try {
@@ -502,7 +540,7 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     } catch (e) {
                         // 이미 설정되어 있으면 무시
                     }
-                    indicatorSeriesRef.current.push({ series: s, label: key });
+                    indicatorSeriesRef.current.push({ series: s, label: key, priceScaleId });
                 }
             }
         });
@@ -510,7 +548,7 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
             // 사용되지 않은 시리즈 제거 (configs에서 제거된 보조지표)
             // 모든 시리즈를 한 번에 수집한 후 한 번에 제거하여 렌더링 최소화
             const seriesToRemove = [];
-            existingSeriesMap.forEach((series, label) => {
+            existingSeriesMap.forEach(({ series, priceScaleId }, label) => {
                 if (!usedLabels.has(label)) {
                     seriesToRemove.push({ series, label });
                 }
@@ -569,35 +607,176 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                             <span>C {hoverInfo.candle.close?.toFixed?.(2)}</span>
                         </div>
                     )}
-                    {hoverInfo.indicators && hoverInfo.indicators.length > 0 && (
-                        <div>
-                            {Array.from({ length: Math.ceil(hoverInfo.indicators.length / 5) }, (_, rowIdx) => {
-                                const startIdx = rowIdx * 5;
-                                const endIdx = startIdx + 5;
-                                const rowIndicators = hoverInfo.indicators.slice(startIdx, endIdx);
+                </div>
+            )}
+            {hoverInfo && crosshairPosition && (() => {
+                // 모든 라벨 정보 수집 (OHLC + 보조지표)
+                const allLabels = [];
+                const LABEL_HEIGHT = 20; // 라벨 높이 (픽셀)
+                const MIN_SPACING = 28; // 최소 간격 (픽셀) - 라벨이 완전히 겹치지 않도록 여유 공간 확보
+                
+                // OHLC 라벨 정보 수집
+                if (hoverInfo.candle && hoverInfo.candle.yPos !== null && hoverInfo.candle.yPos !== undefined && 
+                    typeof hoverInfo.candle.yPos === 'number' && !isNaN(hoverInfo.candle.yPos) && isFinite(hoverInfo.candle.yPos)) {
+                    const baseY = hoverInfo.candle.yPos;
+                    if (hoverInfo.candle.open != null && !Number.isNaN(hoverInfo.candle.open)) {
+                        allLabels.push({ type: 'ohlc', key: 'O', y: baseY - 30, originalY: baseY, offset: -30 });
+                    }
+                    if (hoverInfo.candle.high != null && !Number.isNaN(hoverInfo.candle.high)) {
+                        allLabels.push({ type: 'ohlc', key: 'H', y: baseY - 10, originalY: baseY, offset: -10 });
+                    }
+                    if (hoverInfo.candle.low != null && !Number.isNaN(hoverInfo.candle.low)) {
+                        allLabels.push({ type: 'ohlc', key: 'L', y: baseY + 10, originalY: baseY, offset: 10 });
+                    }
+                    if (hoverInfo.candle.close != null && !Number.isNaN(hoverInfo.candle.close)) {
+                        allLabels.push({ type: 'ohlc', key: 'C', y: baseY + 30, originalY: baseY, offset: 30 });
+                    }
+                }
+                
+                // 보조지표 라벨 정보 수집
+                if (hoverInfo.indicators && hoverInfo.indicators.length > 0) {
+                    hoverInfo.indicators.forEach((ind, idx) => {
+                        let labelTop = null;
+                        if (ind.yPos !== null && ind.yPos !== undefined && typeof ind.yPos === 'number' && !isNaN(ind.yPos) && isFinite(ind.yPos)) {
+                            labelTop = ind.yPos;
+                        }
+                        
+                        // VOL과 VOLMA가 함께 있을 때 VOL을 약간 위로 올림
+                        const hasVol = hoverInfo.indicators.some(i => i.label === 'VOL');
+                        const hasVolma = hoverInfo.indicators.some(i => i.label && i.label.startsWith('VOLMA'));
+                        if (hasVol && hasVolma && ind.label === 'VOL' && labelTop !== null) {
+                            labelTop = labelTop - 20;
+                        }
+                        
+                        if (labelTop === null && crosshairPosition.y !== null && crosshairPosition.y !== undefined) {
+                            labelTop = crosshairPosition.y + (idx * 25);
+                        }
+                        
+                        if (labelTop !== null && !isNaN(labelTop) && isFinite(labelTop)) {
+                            allLabels.push({ type: 'indicator', label: ind.label, value: ind.value, y: labelTop, originalY: labelTop });
+                        }
+                    });
+                }
+                
+                // y 좌표 기준으로 정렬
+                allLabels.sort((a, b) => a.y - b.y);
+                
+                // 겹치는 라벨들을 조정 (한 번의 순회로 모든 겹침 해결)
+                for (let i = 1; i < allLabels.length; i++) {
+                    const current = allLabels[i];
+                    const prev = allLabels[i - 1];
+                    const distance = current.y - prev.y;
+                    
+                    if (distance < MIN_SPACING) {
+                        // 겹치는 경우, 현재 라벨을 아래로 이동하여 최소 간격 확보
+                        current.y = prev.y + MIN_SPACING;
+                        
+                        // 이전 라벨들도 다시 확인 (조정된 위치가 더 이전 라벨과 겹칠 수 있음)
+                        for (let j = i - 2; j >= 0; j--) {
+                            const prevPrev = allLabels[j];
+                            const newDistance = current.y - prevPrev.y;
+                            if (newDistance < MIN_SPACING) {
+                                current.y = prevPrev.y + MIN_SPACING;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // 역방향으로도 확인하여 위쪽 겹침 해결
+                for (let i = allLabels.length - 2; i >= 0; i--) {
+                    const current = allLabels[i];
+                    const next = allLabels[i + 1];
+                    const distance = next.y - current.y;
+                    
+                    if (distance < MIN_SPACING) {
+                        // 겹치는 경우, 현재 라벨을 위로 이동
+                        current.y = next.y - MIN_SPACING;
+                        
+                        // 다음 라벨들도 다시 확인
+                        for (let j = i + 2; j < allLabels.length; j++) {
+                            const nextNext = allLabels[j];
+                            const newDistance = nextNext.y - current.y;
+                            if (newDistance < MIN_SPACING) {
+                                current.y = nextNext.y - MIN_SPACING;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                                return (
+                <>
+                    {/* OHLC 라벨 표시 - 각각 별도 줄에 표시 */}
+                    {hoverInfo.candle && hoverInfo.candle.yPos !== null && hoverInfo.candle.yPos !== undefined && 
+                     typeof hoverInfo.candle.yPos === 'number' && !isNaN(hoverInfo.candle.yPos) && isFinite(hoverInfo.candle.yPos) && (
+                        <>
+                            {allLabels
+                                .filter(label => label.type === 'ohlc')
+                                .map(label => {
+                                    const value = label.key === 'O' ? hoverInfo.candle.open :
+                                                 label.key === 'H' ? hoverInfo.candle.high :
+                                                 label.key === 'L' ? hoverInfo.candle.low :
+                                                 hoverInfo.candle.close;
+                                    if (value == null || Number.isNaN(value)) return null;
+                                    
                                 return (
                                     <div
-                                        key={rowIdx}
+                                            key={`ohlc-${label.key}`}
                                         style={{
-                                            display: 'flex',
-                                            flexWrap: 'nowrap',
-                                            gap: 4,
-                                            marginBottom: rowIdx < Math.ceil(hoverInfo.indicators.length / 5) - 1 ? 2 : 0,
-                                        }}
-                                    >
-                                        {rowIndicators.map((ind, idx) => (
-                                            <div key={startIdx + idx} style={{ whiteSpace: 'nowrap' }}>
-                                                <span style={{ color: '#4cafef', marginRight: 3 }}>{ind.label}:</span>
-                                                <span>{Number(ind.value).toFixed(2)}</span>
-                                            </div>
-                                        ))}
+                                                position: 'absolute',
+                                                left: `${crosshairPosition.x + 5}px`,
+                                                top: `${label.y}px`,
+                                                padding: '4px 6px',
+                                                backgroundColor: 'rgba(9,10,13,0.9)',
+                                                border: '1px solid #2b2b43',
+                                                borderRadius: 3,
+                                                fontSize: 10,
+                                                color: '#d1d4dc',
+                                                pointerEvents: 'none',
+                                                whiteSpace: 'nowrap',
+                                                zIndex: 10,
+                                                transform: 'translateY(-50%)',
+                                            }}
+                                        >
+                                            <span style={{ color: '#f2ff00', marginRight: 4 }}>{label.key}:</span>
+                                            <span>{value.toFixed(2)}</span>
                                     </div>
                                 );
                             })}
-                        </div>
+                        </>
                     )}
+                    {/* 보조지표 라벨 표시 */}
+                    {allLabels
+                        .filter(label => label.type === 'indicator')
+                        .map((label, idx) => (
+                            <div
+                                key={`${label.label}-${idx}`}
+                                style={{
+                                    position: 'absolute',
+                                    left: `${crosshairPosition.x + 5}px`,
+                                    top: `${label.y}px`,
+                                    padding: '4px 6px',
+                                    backgroundColor: 'rgba(9,10,13,0.9)',
+                                    border: '1px solid #2b2b43',
+                                    borderRadius: 3,
+                                    fontSize: 10,
+                                    color: '#d1d4dc',
+                                    pointerEvents: 'none',
+                                    whiteSpace: 'nowrap',
+                                    zIndex: 10,
+                                    transform: 'translateY(-50%)',
+                                }}
+                            >
+                                <span style={{ color: '#4cafef', marginRight: 4 }}>{label.label}:</span>
+                                <span>{Number(label.value).toFixed(2)}</span>
                 </div>
-            )}
+                        ))}
+                </>
+                );
+            })()}
         </div>
     );
 };
