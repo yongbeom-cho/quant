@@ -117,21 +117,63 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
     useEffect(() => {
         if (!data || data.length === 0 || !chartRef.current) return;
         
-        // 우리가 가진 가장 과거 시간 저장
-        firstTimeRef.current = data[0].time;
-        
-        // 캔들 데이터 세팅 (null/NaN 값 필터링)
-        const validCandleData = data.filter(d => 
-            d.open != null && !Number.isNaN(d.open) &&
-            d.high != null && !Number.isNaN(d.high) &&
-            d.low != null && !Number.isNaN(d.low) &&
-            d.close != null && !Number.isNaN(d.close)
-        );
-        candleSeriesRef.current.setData(validCandleData);
+        // 모든 업데이트를 requestAnimationFrame으로 배치 처리하여 깜빡임 방지
+        requestAnimationFrame(() => {
+            // 우리가 가진 가장 과거 시간 저장
+            firstTimeRef.current = data[0].time;
+            
+            // 캔들 데이터 세팅 (null/NaN 값 필터링)
+            const validCandleData = data.filter(d => 
+                d.open != null && !Number.isNaN(d.open) &&
+                d.high != null && !Number.isNaN(d.high) &&
+                d.low != null && !Number.isNaN(d.low) &&
+                d.close != null && !Number.isNaN(d.close)
+            );
 
-        // 이전 지표 청소
-        indicatorSeriesRef.current.forEach(({ series }) => chartRef.current.removeSeries(series));
-        indicatorSeriesRef.current = [];
+            // 기존 보조지표를 Map으로 관리 (label -> series)하여 재사용
+            const existingSeriesMap = new Map();
+            indicatorSeriesRef.current.forEach(({ series, label }) => {
+                existingSeriesMap.set(label, series);
+            });
+            
+            // indicatorSeriesRef를 초기화하여 중복 방지
+            indicatorSeriesRef.current = [];
+            
+            // 사용할 보조지표 label 집합을 추적
+            const usedLabels = new Set();
+            
+            // 시리즈를 재사용하거나 새로 추가하는 헬퍼 함수
+            const getOrCreateSeries = (label, seriesType, options) => {
+                usedLabels.add(label);
+                let series = existingSeriesMap.get(label);
+                if (series) {
+                    try {
+                        // 기존 시리즈 재사용 - 옵션 업데이트만 수행
+                        // priceScaleId는 시리즈 생성 시에만 설정 가능하므로 변경 불가
+                        // 옵션에서 priceScaleId 제외하고 업데이트
+                        const { priceScaleId, ...updateOptions } = options;
+                        if (Object.keys(updateOptions).length > 0) {
+                            series.applyOptions(updateOptions);
+                        }
+                        return series;
+                    } catch (e) {
+                        // 시리즈가 유효하지 않으면 재생성
+                        try {
+                            chartRef.current.removeSeries(series);
+                        } catch (removeError) {
+                            // 이미 제거되었을 수 있음
+                        }
+                        series = chartRef.current.addSeries(seriesType, options);
+                        existingSeriesMap.set(label, series);
+                        return series;
+                    }
+                } else {
+                    // 새 시리즈 추가
+                    series = chartRef.current.addSeries(seriesType, options);
+                    existingSeriesMap.set(label, series);
+                    return series;
+                }
+            };
 
         // 보조지표를 그룹별로 분류
         const independentIndicators = [];
@@ -225,7 +267,7 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     .filter(d => d.mas && d.mas[key] != null && !Number.isNaN(d.mas[key]))
                     .map(d => ({ time: d.time, value: d.mas[key] }));
                 if (lineData.length > 0) {
-                    const s = chartRef.current.addSeries(LineSeries, baseOptions);
+                    const s = getOrCreateSeries(key, LineSeries, baseOptions);
                     s.setData(lineData);
                     indicatorSeriesRef.current.push({ series: s, label: key });
                 }
@@ -233,8 +275,8 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                 const key = `BB${conf.period}`;
                 const bbData = data.filter(d => d.bbs && d.bbs[key]);
                 if (bbData.length > 0) {
-                    const up = chartRef.current.addSeries(LineSeries, baseOptions);
-                    const lo = chartRef.current.addSeries(LineSeries, baseOptions);
+                    const up = getOrCreateSeries(`${key}_UP`, LineSeries, baseOptions);
+                    const lo = getOrCreateSeries(`${key}_DN`, LineSeries, baseOptions);
                     const upData = bbData
                         .filter(d => d.bbs[key].up != null && !Number.isNaN(d.bbs[key].up))
                         .map(d => ({ time: d.time, value: d.bbs[key].up }));
@@ -252,8 +294,8 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                 const key = `ICHI${conf.period.replace(/,/g, '_')}`;
                 const ichiData = data.filter(d => d.ichis && d.ichis[key]);
                 if (ichiData.length > 0) {
-                    const sa = chartRef.current.addSeries(LineSeries, baseOptions);
-                    const sb = chartRef.current.addSeries(LineSeries, { ...baseOptions, color: conf.color + '80' });
+                    const sa = getOrCreateSeries(`${key}_SA`, LineSeries, baseOptions);
+                    const sb = getOrCreateSeries(`${key}_SB`, LineSeries, { ...baseOptions, color: conf.color + '80' });
                     const saData = ichiData
                         .filter(d => d.ichis[key].sa != null && !Number.isNaN(d.ichis[key].sa))
                         .map(d => ({ time: d.time, value: d.ichis[key].sa }));
@@ -272,7 +314,7 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     .filter(d => d.psars && d.psars['PSAR'] != null && !Number.isNaN(d.psars['PSAR']))
                     .map(d => ({ time: d.time, value: d.psars['PSAR'] }));
                 if (psarData.length > 0) {
-                    const s = chartRef.current.addSeries(LineSeries, { 
+                    const s = getOrCreateSeries('PSAR', LineSeries, { 
                         ...baseOptions, 
                         lineStyle: 2, 
                         lineWidth: 0, 
@@ -286,8 +328,8 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                 const key = `DC${conf.period}`;
                 const dcData = data.filter(d => d.donchians && d.donchians[key]);
                 if (dcData.length > 0) {
-                    const up = chartRef.current.addSeries(LineSeries, baseOptions);
-                    const lo = chartRef.current.addSeries(LineSeries, baseOptions);
+                    const up = getOrCreateSeries(`${key}_UP`, LineSeries, baseOptions);
+                    const lo = getOrCreateSeries(`${key}_LO`, LineSeries, baseOptions);
                     const upData = dcData
                         .filter(d => d.donchians[key].up != null && !Number.isNaN(d.donchians[key].up))
                         .map(d => ({ time: d.time, value: d.donchians[key].up }));
@@ -305,23 +347,13 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
         });
 
         // volume과 volma가 같은 pane을 사용하도록 volumePaneId 추적
-        let volumePaneId = null;
-        let volumePaneIndex = null;
-        
-        // volume 또는 volma의 인덱스를 찾기
-        independentIndicators.forEach((conf, idx) => {
-            if (conf.type === 'volume' || conf.type === 'vol_sma' || conf.type === 'volma') {
-                if (volumePaneIndex === null) {
-                    volumePaneIndex = idx;
-                    volumePaneId = 'pane_VOL';
-                }
-            }
-        });
+        let volumePaneId = 'pane_VOL';
 
         // 2. 독립 보조지표들 (RSI, MFI, CCI, ATR, ADX, VOL, VOLMA) - 각각 고유한 priceScaleId 사용 (상단부터 순차 배치)
         // 실제 pane 인덱스를 추적 (volume/volma는 하나로 카운트)
         let actualPaneIndex = 0;
         let volumePaneAssigned = false;
+        let volumePaneIndex = null; // volume이 할당된 실제 pane 인덱스를 저장
         
         independentIndicators.forEach((conf, idx) => {
             const baseOptions = { 
@@ -337,11 +369,12 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                 if (!volumePaneAssigned) {
                     // volume/volma의 첫 번째 항목이 실제 pane 인덱스 결정
                     paneIndex = actualPaneIndex;
+                    volumePaneIndex = actualPaneIndex; // volume pane 인덱스 저장
                     volumePaneAssigned = true;
                     actualPaneIndex++; // volume/volma pane 할당 후 다음 pane으로
                 } else {
-                    // volma는 volume과 같은 pane 사용 (actualPaneIndex 증가 안 함)
-                    paneIndex = actualPaneIndex - 1; // 이전 pane 인덱스 사용
+                    // volma는 volume과 같은 pane 사용
+                    paneIndex = volumePaneIndex; // 저장된 volume pane 인덱스 사용
                 }
             } else {
                 // volume/volma가 아닌 지표는 순차적으로 pane 인덱스 할당
@@ -376,7 +409,7 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     .filter(d => d.oscillators && d.oscillators[key] != null && !Number.isNaN(d.oscillators[key]))
                     .map(d => ({ time: d.time, value: d.oscillators[key] }));
                 if (oscData.length > 0) {
-                    const s = chartRef.current.addSeries(LineSeries, { ...baseOptions, priceScaleId: paneId });
+                    const s = getOrCreateSeries(key, LineSeries, { ...baseOptions, priceScaleId: paneId });
                     s.setData(oscData);
                     chartRef.current.priceScale(paneId).applyOptions({ 
                         scaleMargins: margins,
@@ -391,7 +424,7 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     .filter(d => d.atrs && d.atrs[key] != null && !Number.isNaN(d.atrs[key]))
                     .map(d => ({ time: d.time, value: d.atrs[key] }));
                 if (atrData.length > 0) {
-                    const s = chartRef.current.addSeries(LineSeries, { ...baseOptions, priceScaleId: paneId });
+                    const s = getOrCreateSeries(key, LineSeries, { ...baseOptions, priceScaleId: paneId });
                     s.setData(atrData);
                     chartRef.current.priceScale(paneId).applyOptions({ 
                         scaleMargins: margins,
@@ -404,9 +437,9 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                 const paneId = `pane_${key}`;
                 const adxData = data.filter(d => d.adxs && d.adxs[key]);
                 if (adxData.length > 0) {
-                    const sAdx = chartRef.current.addSeries(LineSeries, { ...baseOptions, priceScaleId: paneId });
-                    const sPlus = chartRef.current.addSeries(LineSeries, { ...baseOptions, color: '#4CAF50', lineWidth: 1, priceScaleId: paneId });
-                    const sMinus = chartRef.current.addSeries(LineSeries, { ...baseOptions, color: '#F44336', lineWidth: 1, priceScaleId: paneId });
+                    const sAdx = getOrCreateSeries(key, LineSeries, { ...baseOptions, priceScaleId: paneId });
+                    const sPlus = getOrCreateSeries(`${key}_PLUS`, LineSeries, { ...baseOptions, color: '#4CAF50', lineWidth: 1, priceScaleId: paneId });
+                    const sMinus = getOrCreateSeries(`${key}_MINUS`, LineSeries, { ...baseOptions, color: '#F44336', lineWidth: 1, priceScaleId: paneId });
                     const adxLineData = adxData
                         .filter(d => d.adxs[key].adx != null && !Number.isNaN(d.adxs[key].adx))
                         .map(d => ({ time: d.time, value: d.adxs[key].adx }));
@@ -437,7 +470,7 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     color: d.close >= d.open ? 'rgba(226, 16, 16, 0.6)' : 'rgba(0, 81, 255, 0.6)'
                 }));
                 if (volData.length > 0) {
-                    const s = chartRef.current.addSeries(HistogramSeries, { 
+                    const s = getOrCreateSeries('VOL', HistogramSeries, { 
                         priceFormat: { type: 'volume' }, 
                         priceScaleId: paneId,
                         priceLineVisible: false,
@@ -457,7 +490,7 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     .filter(d => d.volumes && d.volumes[key] != null && !Number.isNaN(d.volumes[key]))
                     .map(d => ({ time: d.time, value: d.volumes[key] }));
                 if (volmaData.length > 0) {
-                    const s = chartRef.current.addSeries(LineSeries, { ...baseOptions, priceScaleId: paneId });
+                    const s = getOrCreateSeries(key, LineSeries, { ...baseOptions, priceScaleId: paneId });
                     s.setData(volmaData);
                     // volume이 이미 priceScale을 설정했을 수 있으므로, 없을 때만 설정
                     try {
@@ -471,6 +504,33 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     indicatorSeriesRef.current.push({ series: s, label: key });
                 }
             }
+        });
+
+            // 사용되지 않은 시리즈 제거 (configs에서 제거된 보조지표)
+            // 모든 시리즈를 한 번에 수집한 후 한 번에 제거하여 렌더링 최소화
+            const seriesToRemove = [];
+            existingSeriesMap.forEach((series, label) => {
+                if (!usedLabels.has(label)) {
+                    seriesToRemove.push({ series, label });
+                }
+            });
+            
+            // 모든 시리즈를 한 번에 제거
+            seriesToRemove.forEach(({ series, label }) => {
+                try {
+                    // 시리즈가 유효한지 확인 후 제거
+                    if (series && chartRef.current) {
+                        chartRef.current.removeSeries(series);
+                    }
+                } catch (e) {
+                    // 이미 제거되었거나 유효하지 않은 시리즈는 무시
+                }
+                existingSeriesMap.delete(label);
+            });
+
+            // 모든 보조지표 추가가 완료된 후 마지막에 캔들 데이터 설정
+            // 이렇게 하면 차트가 한 번만 렌더링되어 깜빡임이 최소화됨
+            candleSeriesRef.current.setData(validCandleData);
         });
     }, [data, configs]);
 
