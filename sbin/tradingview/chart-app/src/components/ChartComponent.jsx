@@ -114,8 +114,43 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
         };
     }, []);
 
+    // 이전 data와 configs를 추적하여 불필요한 렌더링 방지
+    const prevDataLengthRef = useRef(0);
+    const prevDataFirstTimeRef = useRef(null);
+    const prevDataLastTimeRef = useRef(null);
+    const prevConfigsKeyRef = useRef('');
+    const isUpdatingRef = useRef(false);
+    
     useEffect(() => {
         if (!data || data.length === 0 || !chartRef.current) return;
+        
+        // 이미 업데이트 중이면 무시
+        if (isUpdatingRef.current) return;
+        
+        // data가 실제로 변경되었는지 확인 (길이, 첫 시간, 마지막 시간)
+        const dataLength = data.length;
+        const dataFirstTime = data[0]?.time;
+        const dataLastTime = data[dataLength - 1]?.time;
+        
+        const dataChanged = prevDataLengthRef.current !== dataLength ||
+            prevDataFirstTimeRef.current !== dataFirstTime ||
+            prevDataLastTimeRef.current !== dataLastTime;
+        
+        // configs가 실제로 변경되었는지 확인 (간단한 키 생성)
+        const configsKey = JSON.stringify(configs.map(c => ({ type: c.type, period: c.period, active: c.active })));
+        const configsChanged = prevConfigsKeyRef.current !== configsKey;
+        
+        // 둘 다 변경되지 않았으면 실행하지 않음
+        if (!dataChanged && !configsChanged) return;
+        
+        // 업데이트 플래그 설정
+        isUpdatingRef.current = true;
+        
+        // 이전 값 업데이트
+        prevDataLengthRef.current = dataLength;
+        prevDataFirstTimeRef.current = dataFirstTime;
+        prevDataLastTimeRef.current = dataLastTime;
+        prevConfigsKeyRef.current = configsKey;
         
         // 모든 업데이트를 requestAnimationFrame으로 배치 처리하여 깜빡임 방지
         requestAnimationFrame(() => {
@@ -531,6 +566,9 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
             // 모든 보조지표 추가가 완료된 후 마지막에 캔들 데이터 설정
             // 이렇게 하면 차트가 한 번만 렌더링되어 깜빡임이 최소화됨
             candleSeriesRef.current.setData(validCandleData);
+            
+            // 업데이트 완료 플래그 해제
+            isUpdatingRef.current = false;
         });
     }, [data, configs]);
 
