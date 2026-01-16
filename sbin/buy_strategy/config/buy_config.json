@@ -1,0 +1,274 @@
+[
+    {
+        "index": 0,
+        "strategy_name": "vbt_with_filters",
+        "description": "변동성 돌파 전략 (EMA, RSI, 거래량 필터)",
+        "buy_signal_config": {
+            "window_list": [
+                5,
+                10
+            ],
+            "k_long_list": [
+                0.4,
+                0.5,
+                0.6
+            ],
+            "k_short_list": [
+                0.4,
+                0.5,
+                0.6
+            ],
+            "ema_period_list": [
+                15,
+                20
+            ],
+            "rsi_period_list": [
+                8,
+                14
+            ],
+            "rsi_upper_list": [
+                70
+            ],
+            "rsi_lower_list": [
+                30
+            ],
+            "use_std_list": [
+                false,
+                true
+            ],
+            "std_mult_list": [
+                1.0
+            ],
+            "volume_window_list": [
+                20
+            ],
+            "volume_mult_list": [
+                1.0,
+                1.5
+            ],
+            "volatility_window_list": [
+                20
+            ],
+            "volatility_threshold_list": [
+                0.0,
+                0.005
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 1,
+        "strategy_name": "vbt_with_filters_quick",
+        "description": "VBT 전략 빠른 테스트용 (적은 파라미터)",
+        "buy_signal_config": {
+            "window_list": [
+                5
+            ],
+            "k_long_list": [
+                0.5
+            ],
+            "k_short_list": [
+                0.5
+            ],
+            "ema_period_list": [
+                15
+            ],
+            "rsi_period_list": [
+                14
+            ],
+            "rsi_upper_list": [
+                70
+            ],
+            "rsi_lower_list": [
+                30
+            ],
+            "use_std_list": [
+                false
+            ],
+            "std_mult_list": [
+                1.0
+            ],
+            "volume_window_list": [
+                20
+            ],
+            "volume_mult_list": [
+                1.0
+            ],
+            "volatility_window_list": [
+                20
+            ],
+            "volatility_threshold_list": [
+                0.0
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 2,
+        "strategy_name": "low_bb_dru",
+        "description": "볼린저 밴드 하단 반등 전략 (minute60용)",
+        "buy_signal_config": {
+            "window_list": [
+                3,
+                4,
+                5
+            ],
+            "co_upper_list": [
+                1.002,
+                1.003
+            ],
+            "close_band_ratio_lower_list": [
+                0.25,
+                0.4,
+                0.5
+            ],
+            "prev_co_and_lc_range": [
+                1.001,
+                0.98
+            ],
+            "over_sell_threshold_list": [
+                25,
+                31
+            ],
+            "cond6_idx_list": [
+                0,
+                2,
+                3
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 3,
+        "strategy_name": "low_bb_dru_quick",
+        "description": "볼린저 밴드 하단 반등 전략 빠른 테스트용",
+        "buy_signal_config": {
+            "window_list": [
+                4
+            ],
+            "co_upper_list": [
+                1.002
+            ],
+            "close_band_ratio_lower_list": [
+                0.4
+            ],
+            "prev_co_and_lc_range": [
+                1.001,
+                0.98
+            ],
+            "over_sell_threshold_list": [
+                31
+            ],
+            "cond6_idx_list": [
+                3
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 4,
+        "strategy_name": "vbt_with_filters_enhanced",
+        "description": "고도화된 변동성 돌파 전략 (ADX, ATR 추가)",
+        "buy_signal_config": {
+            "k_long_list": [
+                0.4,
+                0.5,
+                0.6
+            ],
+            "k_short_list": [
+                0.4,
+                0.5,
+                0.6
+            ],
+            "ema_confirm_list": [
+                true
+            ],
+            "ema_period_list": [
+                20
+            ],
+            "rsi_confirm_list": [
+                false,
+                true
+            ],
+            "rsi_period_list": [
+                14
+            ],
+            "rsi_upper_list": [
+                70
+            ],
+            "rsi_lower_list": [
+                30
+            ],
+            "adx_period_list": [
+                14
+            ],
+            "adx_threshold_list": [
+                20.0,
+                25.0
+            ],
+            "atr_period_list": [
+                14
+            ],
+            "atr_mult_list": [
+                1.0
+            ],
+            "volume_window_list": [
+                20
+            ],
+            "volume_mult_list": [
+                1.0
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 5,
+        "strategy_name": "vbt_with_filters_enhanced_quick",
+        "description": "고도화된 변동성 돌파 전략 빠른 테스트용",
+        "buy_signal_config": {
+            "k_long_list": [
+                0.5
+            ],
+            "k_short_list": [
+                0.5
+            ],
+            "ema_confirm_list": [
+                true
+            ],
+            "ema_period_list": [
+                20
+            ],
+            "rsi_confirm_list": [
+                false
+            ],
+            "rsi_period_list": [
+                14
+            ],
+            "rsi_upper_list": [
+                70
+            ],
+            "rsi_lower_list": [
+                30
+            ],
+            "adx_period_list": [
+                14
+            ],
+            "adx_threshold_list": [
+                20.0
+            ],
+            "atr_period_list": [
+                14
+            ],
+            "atr_mult_list": [
+                1.0
+            ],
+            "volume_window_list": [
+                20
+            ],
+            "volume_mult_list": [
+                1.0
+            ],
+            "max_investment_ratio": 1.0
+        }
+    }
+]
