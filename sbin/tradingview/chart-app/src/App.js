@@ -29,21 +29,45 @@ function App() {
     useEffect(() => {
         const handler = setTimeout(() => {
             const periods = {};
-            indicators.forEach(ind => { periods[ind.id] = ind.period; });
+            indicators.forEach(ind => { 
+                periods[ind.id] = ind.period;
+                // vol의 volma period도 저장
+                if (ind.category === 'vol' && ind.volmaActive) {
+                    periods[`${ind.id}_volma`] = ind.volmaPeriod || '20';
+                }
+            });
             setDebouncedPeriods(periods);
         }, 400);
         return () => clearTimeout(handler);
-    }, [indicators.map(i => i.period).join(',')]);
+    }, [indicators.map(i => `${i.id}-${i.period}-${i.category === 'vol' ? i.volmaActive : ''}-${i.category === 'vol' ? i.volmaPeriod : ''}`).join(',')]);
 
     useEffect(() => {
         fetch(`http://localhost:8000/api/tickers`).then(res => res.json()).then(setTickers);
     }, []);
 
     const activeConfigs = useMemo(() => {
-        return indicators.filter(i => i.active).map(i => ({
-            ...i,
-            period: debouncedPeriods[i.id] || i.period
-        }));
+        const configs = [];
+        indicators.filter(i => i.active).forEach(i => {
+            const config = {
+                ...i,
+                period: debouncedPeriods[i.id] || i.period
+            };
+            configs.push(config);
+            
+            // vol이 활성화되어 있고 volma도 활성화되어 있으면 volma도 추가
+            if (i.category === 'vol' && i.volmaActive) {
+                configs.push({
+                    id: i.id + '_volma',
+                    category: 'volma',
+                    type: 'volma',
+                    period: debouncedPeriods[`${i.id}_volma`] || i.volmaPeriod || '20',
+                    color: i.volmaColor || '#607D8B',
+                    width: i.volmaWidth || 2,
+                    active: true
+                });
+            }
+        });
+        return configs;
     }, [indicators, debouncedPeriods]);
 
     const fetchData = useCallback(async (isInitial = false) => {
@@ -100,19 +124,27 @@ function App() {
             'rsi': { type: 'rsi', period: '14', color: '#E91E63' },
             'mfi': { type: 'mfi', period: '14', color: '#4CAF50' },
             'cci': { type: 'cci', period: '20', color: '#FF9800' },
-            'vol': { type: 'volume', period: '0', color: '#607D8B' },
-            'volma': { type: 'volma', period: '20', color: '#607D8B' },
+            'vol': { type: 'volume', period: '0', color: '#607D8B', volmaActive: false, volmaPeriod: '20', volmaColor: '#607D8B', volmaWidth: 2 },
             'atr': { type: 'atr', period: '14', color: '#00BCD4' },
             'psar': { type: 'psar', period: '0', color: '#FFFFFF', width: 1 },
             'adx': { type: 'adx', period: '14', color: '#FFEB3B' },
             'dc': { type: 'donchian', period: '20', color: '#795548' }
         };
 
-        // MA는 누를 때마다 계속 추가
+        const isOverlay = overlayCategories.includes(category);
+        const isSeparated = separatedCategories.includes(category);
+
+        // MA는 누를 때마다 계속 추가 (오버레이 지표)
         if (category === 'ma') {
             if (presets[category]) {
-                setIndicators([...indicators, { ...base, ...presets[category] }]);
+                // 오버레이 지표는 항상 앞에 추가
+                setIndicators([...overlayIndicators, { ...base, ...presets[category] }, ...separatedIndicators]);
             }
+            return;
+        }
+
+        // volma는 별도로 추가 불가 (vol에 포함)
+        if (category === 'volma') {
             return;
         }
 
@@ -121,7 +153,13 @@ function App() {
         if (exists) {
             setIndicators(indicators.filter(ind => ind.category !== category));
         } else if (presets[category]) {
-            setIndicators([...indicators, { ...base, ...presets[category] }]);
+            if (isOverlay) {
+                // 오버레이 지표는 오버레이 지표 섹션에 추가
+                setIndicators([...overlayIndicators, { ...base, ...presets[category] }, ...separatedIndicators]);
+            } else if (isSeparated) {
+                // 분리 지표는 분리 지표 섹션에 추가
+                setIndicators([...overlayIndicators, ...separatedIndicators, { ...base, ...presets[category] }]);
+            }
         }
     };
 
@@ -129,48 +167,85 @@ function App() {
         setIndicators(indicators.map(ind => ind.id === id ? { ...ind, [field]: value } : ind));
     };
 
+    // 오버레이 지표와 분리 지표 분리
+    const overlayCategories = ['ma', 'bb', 'ichi', 'psar', 'dc'];
+    const separatedCategories = ['rsi', 'mfi', 'cci', 'vol', 'atr', 'adx'];
+    
+    const overlayIndicators = useMemo(() => {
+        return indicators.filter(ind => overlayCategories.includes(ind.category));
+    }, [indicators]);
+    
+    const separatedIndicators = useMemo(() => {
+        return indicators.filter(ind => separatedCategories.includes(ind.category));
+    }, [indicators]);
+
+    const moveIndicator = (id, direction) => {
+        // 오버레이 지표는 순서 변경 불가
+        const indicator = indicators.find(ind => ind.id === id);
+        if (!indicator || overlayCategories.includes(indicator.category)) return;
+        
+        const separatedList = separatedIndicators;
+        const index = separatedList.findIndex(ind => ind.id === id);
+        if (index === -1) return;
+        
+        const newIndex = direction === 'up' ? index - 1 : index + 1;
+        if (newIndex < 0 || newIndex >= separatedList.length) return;
+        
+        // 분리 지표만 재정렬
+        const newSeparatedList = [...separatedList];
+        [newSeparatedList[index], newSeparatedList[newIndex]] = [newSeparatedList[newIndex], newSeparatedList[index]];
+        
+        // 오버레이 지표 + 재정렬된 분리 지표로 합치기
+        setIndicators([...overlayIndicators, ...newSeparatedList]);
+    };
+
     return (
         <div style={containerStyle}>
             <div style={leftSidebarStyle}>
-                <h3 style={sidebarTitle}>지표 설정</h3>
-                <div style={addBtnGroup}>
-                    {['ma', 'bb', 'ichi', 'rsi', 'mfi', 'cci', 'vol', 'volma', 'atr', 'psar', 'adx', 'dc'].map(cat => (
-                        <button key={cat} onClick={() => addIndicator(cat)} style={addBtnStyle}>{cat.toUpperCase()}</button>
-                    ))}
+                {/* 오버레이 지표 섹션 */}
+                <div style={{ marginBottom: '20px' }}>
+                    <h3 style={sidebarTitle}>오버레이 지표</h3>
+                    <div style={addBtnGroup}>
+                        {overlayCategories.map(cat => (
+                            <button key={cat} onClick={() => addIndicator(cat)} style={addBtnStyle}>{cat.toUpperCase()}</button>
+                        ))}
+                    </div>
+                    <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                        {overlayIndicators.map((ind) => (
+                            <IndicatorCard 
+                                key={ind.id} 
+                                ind={ind} 
+                                updateIndicator={updateIndicator}
+                                onDelete={() => setIndicators(indicators.filter(i => i.id !== ind.id))}
+                                canMove={false}
+                            />
+                        ))}
+                    </div>
                 </div>
-                <div style={{ overflowY: 'auto', flex: 1 }}>
-                    {indicators.map(ind => (
-                        <div key={ind.id} style={{...cardStyle, borderLeft: `4px solid ${ind.color}`, opacity: ind.active ? 1 : 0.6}}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                <div style={{display:'flex', alignItems:'center', gap: '6px'}}>
-                                    <input type="checkbox" checked={ind.active} onChange={e => updateIndicator(ind.id, 'active', e.target.checked)} />
-                                    {ind.category === 'ma' ? (
-                                        <select value={ind.type} onChange={e => updateIndicator(ind.id, 'type', e.target.value)} style={miniSelect}>
-                                            <option value="sma">SMA</option><option value="ema">EMA</option><option value="wma">WMA</option>
-                                        </select>
-                                    ) : <span style={indicatorLabel}>{ind.type.toUpperCase()}</span>}
-                                </div>
-                                <button onClick={() => setIndicators(indicators.filter(i => i.id !== ind.id))} style={delBtn}>✕</button>
-                            </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: '5px' }}>
-                                {ind.category === 'vol' ? (
-                                    <>
-                                        <div />{/* volume은 period, width, color 모두 숨김 */}
-                                        <div />
-                                        <div />
-                                    </>
-                                ) : (
-                                    <>
-                                        <input type="text" value={ind.period} onChange={e => updateIndicator(ind.id, 'period', e.target.value)} style={miniInput} />
-                                        <select value={ind.width} onChange={e => updateIndicator(ind.id, 'width', parseInt(e.target.value))} style={miniSelect}>
-                                            {[1,2,3,4,5].map(w => <option key={w} value={w}>{w}px</option>)}
-                                        </select>
-                                        <input type="color" value={ind.color} onChange={e => updateIndicator(ind.id, 'color', e.target.value)} style={colorPicker} />
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    ))}
+
+                {/* 분리 지표 섹션 */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                    <h3 style={sidebarTitle}>분리 지표</h3>
+                    <div style={addBtnGroup}>
+                        {separatedCategories.map(cat => (
+                            <button key={cat} onClick={() => addIndicator(cat)} style={addBtnStyle}>{cat.toUpperCase()}</button>
+                        ))}
+                    </div>
+                    <div style={{ overflowY: 'auto', flex: 1 }}>
+                        {separatedIndicators.map((ind, idx) => (
+                            <IndicatorCard 
+                                key={ind.id} 
+                                ind={ind} 
+                                updateIndicator={updateIndicator}
+                                onDelete={() => setIndicators(indicators.filter(i => i.id !== ind.id))}
+                                onMoveUp={() => moveIndicator(ind.id, 'up')}
+                                onMoveDown={() => moveIndicator(ind.id, 'down')}
+                                canMoveUp={idx > 0}
+                                canMoveDown={idx < separatedIndicators.length - 1}
+                                canMove={true}
+                            />
+                        ))}
+                    </div>
                 </div>
             </div>
 
@@ -217,7 +292,8 @@ const miniSelect = { background: '#090a0d', color: '#fff', border: 'none', fontS
 const indicatorLabel = { fontSize: '11px', fontWeight: 'bold', color: '#fff' };
 const miniInput = { background: '#090a0d', color: '#fff', border: '1px solid #434651', padding: '3px', fontSize: '11px', width: '100%' };
 const colorPicker = { width: '100%', height: '22px', border: 'none', background: 'none', cursor: 'pointer' };
-const delBtn = { color: '#ef5350', border: 'none', background: 'none', cursor: 'pointer' };
+const delBtn = { color: '#ef5350', border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px' };
+const moveBtn = { color: '#848e9c', border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px', padding: '2px 4px' };
 const chartHeader = { padding: '10px 15px', borderBottom: '1px solid #2b2b43', display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
 const intervalBtn = { padding: '4px 8px', border: 'none', borderRadius: '2px', cursor: 'pointer', fontSize: '11px' };
 const searchWrapper = { padding: '10px', borderBottom: '1px solid #2b2b43' };
@@ -225,5 +301,99 @@ const searchInput = { width: '100%', padding: '8px', backgroundColor: '#090a0d',
 const tickerTable = { width: '100%', borderCollapse: 'collapse' };
 const tableHead = { backgroundColor: '#1e222d', color: '#848e9c', fontSize: '11px' };
 const tickerRow = { borderBottom: '1px solid #2b2b43', cursor: 'pointer' };
+
+// IndicatorCard 컴포넌트
+const IndicatorCard = ({ ind, updateIndicator, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown, canMove }) => {
+    return (
+        <div style={{...cardStyle, borderLeft: `4px solid ${ind.color}`, opacity: ind.active ? 1 : 0.6}}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div style={{display:'flex', alignItems:'center', gap: '6px'}}>
+                    <input type="checkbox" checked={ind.active} onChange={e => updateIndicator(ind.id, 'active', e.target.checked)} />
+                    {ind.category === 'ma' ? (
+                        <select value={ind.type} onChange={e => updateIndicator(ind.id, 'type', e.target.value)} style={miniSelect}>
+                            <option value="sma">SMA</option><option value="ema">EMA</option><option value="wma">WMA</option>
+                        </select>
+                    ) : <span style={indicatorLabel}>{ind.type.toUpperCase()}</span>}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    {canMove && (
+                        <>
+                            <button 
+                                onClick={onMoveUp} 
+                                disabled={!canMoveUp}
+                                style={{...moveBtn, opacity: canMoveUp ? 1 : 0.3, cursor: canMoveUp ? 'pointer' : 'not-allowed'}}
+                                title="위로 이동"
+                            >
+                                ↑
+                            </button>
+                            <button 
+                                onClick={onMoveDown} 
+                                disabled={!canMoveDown}
+                                style={{...moveBtn, opacity: canMoveDown ? 1 : 0.3, cursor: canMoveDown ? 'pointer' : 'not-allowed'}}
+                                title="아래로 이동"
+                            >
+                                ↓
+                            </button>
+                        </>
+                    )}
+                    <button onClick={onDelete} style={delBtn}>✕</button>
+                </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: '5px' }}>
+                {ind.category === 'vol' ? (
+                    <>
+                        <div />{/* volume은 period, width, color 모두 숨김 */}
+                        <div />
+                        <div />
+                    </>
+                ) : (
+                    <>
+                        <input type="text" value={ind.period} onChange={e => updateIndicator(ind.id, 'period', e.target.value)} style={miniInput} />
+                        <select value={ind.width} onChange={e => updateIndicator(ind.id, 'width', parseInt(e.target.value))} style={miniSelect}>
+                            {[1,2,3,4,5].map(w => <option key={w} value={w}>{w}px</option>)}
+                        </select>
+                        <input type="color" value={ind.color} onChange={e => updateIndicator(ind.id, 'color', e.target.value)} style={colorPicker} />
+                    </>
+                )}
+            </div>
+            {ind.category === 'vol' && (
+                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #2b2b43' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                        <input 
+                            type="checkbox" 
+                            checked={ind.volmaActive || false} 
+                            onChange={e => updateIndicator(ind.id, 'volmaActive', e.target.checked)} 
+                        />
+                        <span style={{ fontSize: '11px', color: '#d1d4dc' }}>VOLMA</span>
+                    </div>
+                    {ind.volmaActive && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: '5px' }}>
+                            <input 
+                                type="text" 
+                                value={ind.volmaPeriod || '20'} 
+                                onChange={e => updateIndicator(ind.id, 'volmaPeriod', e.target.value)} 
+                                style={miniInput} 
+                                placeholder="Period"
+                            />
+                            <select 
+                                value={ind.volmaWidth || 2} 
+                                onChange={e => updateIndicator(ind.id, 'volmaWidth', parseInt(e.target.value))} 
+                                style={miniSelect}
+                            >
+                                {[1,2,3,4,5].map(w => <option key={w} value={w}>{w}px</option>)}
+                            </select>
+                            <input 
+                                type="color" 
+                                value={ind.volmaColor || '#607D8B'} 
+                                onChange={e => updateIndicator(ind.id, 'volmaColor', e.target.value)} 
+                                style={colorPicker} 
+                            />
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
 
 export default App;
