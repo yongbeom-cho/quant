@@ -7,7 +7,7 @@ conda activate stock
 conda env config vars set PYTORCH_ENABLE_MPS_FALLBACK=1
 
 target_strategy_feature=$1
-target_interval=$2
+output_dir=$2
 market=coin
 root_dir=$(cd .. && pwd)
 
@@ -15,12 +15,13 @@ if [ -z "$target_strategy" ]; then
     target_strategy=low_bb_du
 fi
 
-if [ -z "$target_interval" ]; then
-    target_interval=minute60
+if [ -z "$output_dir" ]; then
+    output_dir=${root_dir}/var/xgb_data
 fi
 
-python train_xgb/05_get_strategy_filtered_data.py --root_dir ${root_dir} --market ${market} --target_strategy_feature low_bb_du --interval minute60 &
-python train_xgb/05_get_strategy_filtered_data.py --root_dir ${root_dir} --market ${market} --target_strategy_feature low_bb_du --interval day &
-python train_xgb/05_get_strategy_filtered_data.py --root_dir ${root_dir} --market ${market} --target_strategy_feature low_bb_du --interval minute240 &
-wait
+mkdir -p ${output_dir}
 
+python train_xgb/05_get_strategy_filtered_data.py --root_dir ${root_dir} --market ${market} --target_strategy_feature ${target_strategy_feature} --output_dir ${output_dir} --interval minute60 &
+python train_xgb/05_get_strategy_filtered_data.py --root_dir ${root_dir} --market ${market} --target_strategy_feature ${target_strategy_feature} --output_dir ${output_dir} --interval day &
+python train_xgb/05_get_strategy_filtered_data.py --root_dir ${root_dir} --market ${market} --target_strategy_feature ${target_strategy_feature} --output_dir ${output_dir} --interval minute240 &
+wait
