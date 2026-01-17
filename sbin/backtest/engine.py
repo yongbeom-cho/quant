@@ -55,6 +55,12 @@ def _run_single_backtest_worker(
     )
 
 
+def _run_single_backtest_worker_wrapper(args: tuple) -> PerformanceMetrics:
+    """imap_unordered용 wrapper (단일 튜플 인자를 언패킹)"""
+    buy_config, sell_config, buy_name, sell_name, kwargs = args
+    return _run_single_backtest_worker(buy_config, sell_config, buy_name, sell_name, kwargs)
+
+
 class UnifiedBacktestEngine:
     """
     통합 백테스트 엔진
@@ -266,7 +272,9 @@ class UnifiedBacktestEngine:
         buy_strategies: List[BaseBuyStrategy],
         sell_strategies: List[BaseSellStrategy],
         use_reverse_signal: bool = True,
-        n_workers: int = None
+        n_workers: int = None,
+        checkpoint_interval: int = 100,
+        checkpoint_file: str = None
     ) -> List[PerformanceMetrics]:
         """
         모든 Buy/Sell 전략 조합 테스트 (멀티프로세스)
@@ -277,6 +285,8 @@ class UnifiedBacktestEngine:
             sell_strategies: 청산 전략 리스트
             use_reverse_signal: 리버스 시그널 사용 여부
             n_workers: 워커 수 (None이면 CPU 코어 수)
+            checkpoint_interval: 중간 저장 주기 (기본 100)
+            checkpoint_file: 중간 결과 저장 파일 경로 (None이면 저장 안함)
             
         Returns:
             모든 조합의 PerformanceMetrics 리스트
@@ -296,6 +306,8 @@ class UnifiedBacktestEngine:
         
         total = len(combinations)
         print(f"Starting parallel backtest with {n_workers} workers for {total} combinations...")
+        if checkpoint_file:
+            print(f"Checkpoint file: {checkpoint_file} (saving every {checkpoint_interval} results)")
         
         # 워커 함수에서 사용할 데이터와 설정 준비
         worker_kwargs = {
@@ -306,29 +318,59 @@ class UnifiedBacktestEngine:
             'initial_capital': self.initial_capital
         }
         
+        # 체크포인트 파일 초기화 (헤더 작성)
+        header_written = False
+        if checkpoint_file:
+            # 파일이 있으면 삭제하고 새로 시작
+            import os
+            if os.path.exists(checkpoint_file):
+                os.remove(checkpoint_file)
+        
         # 멀티프로세스 실행
         results = []
+        pending_results = []  # 저장 대기 중인 결과
+        saved_count = 0  # 저장된 결과 수 추적
+        
+        # 워커에 전달할 인자들을 생성 (제너레이터로 메모리 절약)
+        def generate_worker_args():
+            for buy_strat, sell_strat in combinations:
+                yield (buy_strat.config, sell_strat.config,
+                       buy_strat.name, sell_strat.name, worker_kwargs)
+        
         with Pool(processes=n_workers) as pool:
-            async_results = []
-            for i, (buy_strat, sell_strat) in enumerate(combinations):
-                async_result = pool.apply_async(
-                    _run_single_backtest_worker,
-                    args=(buy_strat.config, sell_strat.config, 
-                          buy_strat.name, sell_strat.name, worker_kwargs)
-                )
-                async_results.append(async_result)
-            
-            # 결과 수집
-            for i, async_result in enumerate(async_results):
-                try:
-                    result = async_result.get(timeout=300)  # 5분 타임아웃
+            # imap_unordered: 결과가 준비되는 대로 즉시 처리 (메모리 효율적)
+            for i, result in enumerate(pool.imap_unordered(
+                _run_single_backtest_worker_wrapper,
+                generate_worker_args(),
+                chunksize=10  # 한 번에 워커에 전달할 작업 수
+            )):
+                if checkpoint_file:
+                    pending_results.append(result)
+                else:
                     results.append(result)
-                except Exception as e:
-                    print(f"Error in combination {i}: {e}")
+                
+                # 체크포인트 저장 (N개마다 또는 마지막)
+                if checkpoint_file and pending_results:
+                    if len(pending_results) >= checkpoint_interval or (i + 1) == total:
+                        df = self.results_to_dataframe(pending_results)
+                        # 첫 저장 시 헤더 포함, 이후는 append
+                        if not header_written:
+                            df.to_csv(checkpoint_file, index=False, mode='w')
+                            header_written = True
+                        else:
+                            df.to_csv(checkpoint_file, index=False, mode='a', header=False)
+                        
+                        saved_count += len(pending_results)
+                        pending_results = []  # 저장 완료 후 비우기 (메모리 해제)
                 
                 # 진행 상황 출력
                 if (i + 1) % 100 == 0 or (i + 1) == total:
                     print(f"Progress: {i + 1}/{total} combinations completed")
+        
+        # checkpoint 모드에서는 파일에 저장된 개수 정보만 반환
+        if checkpoint_file:
+            print(f"Total {saved_count} results saved to: {checkpoint_file}")
+            return [None] * saved_count  # 개수 정보만 전달
         
         return results
     

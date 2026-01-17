@@ -281,6 +281,8 @@ Examples:
                         help='Minimum trades filter (default: 1)')
     parser.add_argument('--output', type=str, default=None,
                         help='Output CSV file path (optional)')
+    parser.add_argument('--checkpoint_interval', type=int, default=100,
+                        help='Save results every N combinations (default: 100, only for parallel mode)')
     
     args = parser.parse_args()
     
@@ -387,7 +389,9 @@ Examples:
             data=data,
             buy_strategies=buy_strategies,
             sell_strategies=sell_strategies,
-            n_workers=args.workers
+            n_workers=args.workers,
+            checkpoint_interval=args.checkpoint_interval,
+            checkpoint_file=args.output  # 중간 결과를 output 파일에 저장
         )
     else:
         results = engine.run_cross_combination_test(
@@ -398,21 +402,38 @@ Examples:
     
     # === 6. 결과 출력 ===
     if results:
-        top_results = engine.get_top_results(
-            results,
-            sort_by=args.sort_by,
-            top_n=args.top_n,
-            min_trades=args.min_trades
-        )
-        
-        engine.print_results(top_results, args.top_n)
-        
-        # CSV 출력 (옵션)
-        if args.output:
-            df = engine.results_to_dataframe(results)
+        # checkpoint 모드에서는 파일에서 top 결과를 읽어서 출력
+        if args.parallel and args.output:
+            # CSV 파일에서 결과 읽어서 top_n 출력
+            import pandas as pd
+            df = pd.read_csv(args.output)
             df = df.sort_values(args.sort_by, ascending=False)
-            df.to_csv(args.output, index=False)
-            print(f"\nResults saved to: {args.output}")
+            
+            print(f"\n{'='*80}")
+            print(f"TOP {min(args.top_n, len(df))} RESULTS (from {len(df)} total)")
+            print(f"{'='*80}")
+            
+            for i, (_, row) in enumerate(df.head(args.top_n).iterrows(), 1):
+                print(f"\n[{i}] {row['buy_strategy_name']} + {row['sell_strategy_name']}")
+                print(f"    PnL: {row['total_pnl']:.4f} | Win: {row['win_ratio']:.2%} | "
+                      f"Trades: {int(row['trade_count'])} | MDD: {row['max_drawdown_pct']:.2f}%")
+        else:
+            # 순차 모드 또는 checkpoint 없는 경우
+            top_results = engine.get_top_results(
+                results,
+                sort_by=args.sort_by,
+                top_n=args.top_n,
+                min_trades=args.min_trades
+            )
+            
+            engine.print_results(top_results, args.top_n)
+            
+            # CSV 출력 (옵션)
+            if args.output:
+                df = engine.results_to_dataframe(results)
+                df = df.sort_values(args.sort_by, ascending=False)
+                df.to_csv(args.output, index=False)
+                print(f"\nAll {len(results)} results saved to: {args.output}")
     else:
         print("No results found. Check your data and configuration.")
 

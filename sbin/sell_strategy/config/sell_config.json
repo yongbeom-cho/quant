@@ -24,25 +24,6 @@
     },
     {
         "index": 1,
-        "strategy_name": "bailout_sell_quick",
-        "description": "VBT 청산 전략 빠른 테스트용",
-        "sell_signal_config": {
-            "stop_loss_ratio_list": [
-                0.02
-            ],
-            "bailout_profit_days_list": [
-                1
-            ],
-            "bailout_no_profit_days_list": [
-                4
-            ],
-            "price_flow_sluggish_threshold_list": [
-                0.005
-            ]
-        }
-    },
-    {
-        "index": 2,
         "strategy_name": "timeseries_sell",
         "description": "분할 청산 전략 (상승시 분할매도)",
         "sell_signal_config": {
@@ -74,27 +55,7 @@
         }
     },
     {
-        "index": 3,
-        "strategy_name": "timeseries_sell_quick",
-        "description": "분할 청산 전략 빠른 테스트용",
-        "sell_signal_config": {
-            "uppers_list": [
-                [
-                    1.03,
-                    1.06,
-                    1.10
-                ]
-            ],
-            "lower_list": [
-                0.95
-            ],
-            "close_lower_sell_list": [
-                false
-            ]
-        }
-    },
-    {
-        "index": 4,
+        "index": 2,
         "strategy_name": "simple_ratio_sell",
         "description": "단순 비율 청산 전략 (low_bb_dru용)",
         "sell_signal_config": {
@@ -110,20 +71,7 @@
         }
     },
     {
-        "index": 5,
-        "strategy_name": "simple_ratio_sell_quick",
-        "description": "단순 비율 청산 전략 빠른 테스트용",
-        "sell_signal_config": {
-            "low_limit_ratio_list": [
-                0.90
-            ],
-            "high_limit_ratio_list": [
-                1.11
-            ]
-        }
-    },
-    {
-        "index": 6,
+        "index": 3,
         "strategy_name": "bailout_sell_enhanced",
         "description": "고도화된 VBT 청산 전략 (ATR 트레일링 스탑)",
         "sell_signal_config": {
@@ -145,28 +93,6 @@
             ],
             "bailout_no_profit_days_list": [
                 3,
-                4
-            ]
-        }
-    },
-    {
-        "index": 7,
-        "strategy_name": "bailout_sell_enhanced_quick",
-        "description": "고도화된 VBT 청산 전략 빠른 테스트용",
-        "sell_signal_config": {
-            "stop_loss_ratio_list": [
-                0.02
-            ],
-            "trailing_stop_mult_list": [
-                3.0
-            ],
-            "min_profit_ratio_list": [
-                0.005
-            ],
-            "bailout_profit_days_list": [
-                1
-            ],
-            "bailout_no_profit_days_list": [
                 4
             ]
         }
