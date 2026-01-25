@@ -115,6 +115,11 @@ def create_buy_strategies_from_separate_config(config_path: str, config_idx: int
     """
     buy_strategy/config 폴더의 설정 파일에서 전략 인스턴스 생성
     
+    1. JSON 설정 파일을 로드합니다.
+    2. 지정된 인덱스의 설정을 가져옵니다.
+    3. Registry를 통해 해당 전략의 모든 파라미터 조합을 생성합니다.
+    4. 각 조합별로 전략 객체를 생성하여 리스트로 반환합니다.
+    
     Returns:
         (strategies_list, strategy_name)
     """
@@ -128,14 +133,16 @@ def create_buy_strategies_from_separate_config(config_path: str, config_idx: int
         raise ValueError("buy config must contain 'strategy_name'")
     
     buy_config = config.get('buy_signal_config', config)
+    # Registry에서 파라미터 리스트를 기반으로 모든 가능한 조합(Cartesian Product)을 생성
     combinations = get_all_buy_param_combinations(strategy_name, buy_config)
     
     strategies = []
     for params in combinations:
         params['strategy_name'] = strategy_name
-        # max_investment_ratio 전달
+        # 최대 투자 비율 설정 전달 (자산 관리용)
         if 'max_investment_ratio' in buy_config:
             params['max_investment_ratio'] = buy_config['max_investment_ratio']
+        # 실제 전략 인스턴스 생성
         strategy = get_buy_strategy(strategy_name, params)
         strategies.append(strategy)
     
@@ -144,7 +151,7 @@ def create_buy_strategies_from_separate_config(config_path: str, config_idx: int
 
 def create_sell_strategies_from_separate_config(config_path: str, config_idx: int = 0) -> tuple:
     """
-    sell_strategy/config 폴더의 설정 파일에서 전략 인스턴스 생성
+    sell_strategy/config 폴더의 설정 파일에서 청산 전략 인스턴스 생성
     
     Returns:
         (strategies_list, strategy_name)
@@ -250,8 +257,8 @@ Examples:
                         help='Project root directory')
     parser.add_argument('--market', type=str, default='coin',
                         help='Market type (default: coin)')
-    parser.add_argument('--interval', type=str, default='minute60',
-                        help='Interval (default: minute60)')
+    parser.add_argument('--interval', type=str, default='day',
+                        help='Interval (default: day)')
     parser.add_argument('--ticker', type=str, default=None,
                         help='Specific tickers to test (comma separated)')
     parser.add_argument('--start_date', type=str, default=None,
@@ -264,6 +271,12 @@ Examples:
                         help='Commission fee (default: 0.0005 = 0.05%%)')
     parser.add_argument('--slippage_fee', type=float, default=0.002,
                         help='Slippage fee (default: 0.002 = 0.2%%)')
+    
+    # 다중 포지션 설정 (분할 매수)
+    parser.add_argument('--max_positions', type=int, default=1,
+                        help='Maximum number of concurrent positions per ticker (default: 1)')
+    parser.add_argument('--entry_capital_ratio', type=float, default=1.0,
+                        help='Capital ratio to use for each entry (default: 1.0 = 100%%)')
     
     # 병렬 처리 설정
     parser.add_argument('--parallel', action='store_true',
@@ -375,14 +388,18 @@ Examples:
     print(f"Sell strategies: {len(sell_strategies)} combinations")
     print(f"Total combinations: {len(buy_strategies) * len(sell_strategies)}")
     
-    # === 5. 백테스트 실행 ===
+    # === 5. 백테스트 실행 (핵심 시뮬레이션 환경 구축) ===
     print("\n=== [4/4] Running Backtest ===")
+    print(f"Settings: max_positions={args.max_positions}, entry_capital_ratio={args.entry_capital_ratio}")
     engine = UnifiedBacktestEngine(
         commission_fee=args.commission_fee,
-        slippage_fee=args.slippage_fee
+        slippage_fee=args.slippage_fee,
+        max_positions=args.max_positions,
+        entry_capital_ratio=args.entry_capital_ratio
     )
     
-    # 병렬 또는 순차 실행
+    # 병렬 또는 순차 실행 선택
+    # 병렬 실행 시 중간 결과를 checkpoint_file에 저장하여 OOM(메모리 부족) 방지
     if args.parallel:
         print(f"Using parallel mode (workers: {args.workers or 'auto'})")
         results = engine.run_cross_combination_test_parallel(
@@ -400,9 +417,9 @@ Examples:
             sell_strategies=sell_strategies
         )
     
-    # === 6. 결과 출력 ===
+    # === 6. 결과 출력 및 파일 저장 ===
     if results:
-        # checkpoint 모드에서는 파일에서 top 결과를 읽어서 출력
+        # 병렬 모드에서 체크포인트를 사용한 경우 파일에서 상위 결과 로드 및 출력
         if args.parallel and args.output:
             # CSV 파일에서 결과 읽어서 top_n 출력
             import pandas as pd
@@ -418,7 +435,7 @@ Examples:
                 print(f"    PnL: {row['total_pnl']:.4f} | Win: {row['win_ratio']:.2%} | "
                       f"Trades: {int(row['trade_count'])} | MDD: {row['max_drawdown_pct']:.2f}%")
         else:
-            # 순차 모드 또는 checkpoint 없는 경우
+            # 순차 모드에서는 메모리에 있는 결과를 바로 정렬하여 출력
             top_results = engine.get_top_results(
                 results,
                 sort_by=args.sort_by,
@@ -428,7 +445,7 @@ Examples:
             
             engine.print_results(top_results, args.top_n)
             
-            # CSV 출력 (옵션)
+            # 최종 결과를 CSV로 저장 (사용자 요청 시)
             if args.output:
                 df = engine.results_to_dataframe(results)
                 df = df.sort_values(args.sort_by, ascending=False)

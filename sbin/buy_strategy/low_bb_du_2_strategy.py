@@ -95,9 +95,10 @@ class LowBBDU2Strategy(BaseBuyStrategy):
     
     def calculate_signals(self, df: pd.DataFrame, cached_data: Optional[Dict] = None) -> Dict[str, Any]:
         """
-        매수 신호 계산
+        매수 신호 계산 로직 구현
         
-        7가지 조건을 모두 만족할 때 매수 신호 발생.
+        7가지 엄격한 조건을 모두 만족(AND)할 때 최종 매수 신호를 발생시킵니다.
+        벡터화된 연산(Pandas/Numpy)을 사용하여 속도를 최적화했습니다.
         """
         if talib is None:
             raise ImportError("talib is required for LowBBDU2 strategy")
@@ -108,7 +109,7 @@ class LowBBDU2Strategy(BaseBuyStrategy):
         
         n = len(df)
         
-        # === 지표 계산 ===
+        # === 지표 계산 (캐싱된 데이터를 우선 사용) ===
         if cached_data and 'bb_upper' in cached_data:
             bb_upper = cached_data['bb_upper']
             bb_lower = cached_data['bb_lower']
@@ -121,17 +122,17 @@ class LowBBDU2Strategy(BaseBuyStrategy):
             stoch_k = indicators['stoch_k']
             stoch_d = indicators['stoch_d']
         
-        # === 조건 1: close/open 범위 내 ===
+        # === 조건 1: 캔들 몸통 크기 제한 (너무 긴 장대양봉 제외) ===
         co_ratio = df['close'] / df['open']
         cond1 = (co_ratio >= self.co_ratio_range[0]) & (co_ratio < self.co_ratio_range[1])
         
-        # === 조건 2: 현재 종가가 BB 하단 위 ===
+        # === 조건 2: 반등 확인 (현재 종가가 BB 하단선보다 위에 있어야 함) ===
         cond2 = df['close'] > bb_lower
         
-        # === 스토캐스틱 골든크로스 (올바른 방향) ===
+        # === 스토캐스틱 골든크로스 계산 (Correct Direction) ===
         stoch_gc = (stoch_d < stoch_k) & (stoch_d.shift(1) > stoch_k.shift(1))
         
-        # === 조건 3: cond3_idx에 따른 변형 ===
+        # === 조건 3: 과매도권 스토캐스틱 GC (cond3_idx에 따른 변형 처리) ===
         if self.cond3_idx == 0:
             cond3 = (stoch_k < self.over_sell_threshold) & stoch_gc
         elif self.cond3_idx == 1:
@@ -152,29 +153,29 @@ class LowBBDU2Strategy(BaseBuyStrategy):
         else:
             cond3 = stoch_k < self.over_sell_threshold
         
-        # === 조건 4: 직전 N봉 이내에 BB 하단 아래 음봉 존재 ===
+        # === 조건 4: 최근 하락 이력 (직전 N봉 이내에 BB 하단 돌파 음봉이 있었는지 확인) ===
         cond4_raw = (df['close'] < bb_lower) & ((df['close'] / df['open']) < 1.0)
         cond4 = cond4_raw.shift(1).rolling(self.window).max().fillna(False).astype(bool)
         
-        # === 조건 5: close / 직전 N봉 최저 close ===
+        # === 조건 5: 가격 회복 탄력성 (현재가가 직점 N봉 최저가 대비 과하게 오르지 않았는지) ===
         lowest_close_prev = df['close'].shift(1).rolling(self.window).min()
         cond5 = (df['close'] / lowest_close_prev) < self.cwlc_ratio_lower
         
-        # === 조건 6: low / open < lo_ratio_lower ===
+        # === 조건 6: 아래꼬리 확인 (저가가 시가 대비 일정 비율 이상 하락했는지) ===
         cond6 = (df['low'] / df['open']) < self.lo_ratio_lower
         
-        # === 조건 7: 현재 종가가 BB 하위 N% 이내 ===
+        # === 조건 7: 밴드 내 위치 (종가가 밴드 전체 폭의 하위 30% 이내에 있는지) ===
         band_position = (df['close'] - bb_lower) / (bb_upper - bb_lower)
         cond7 = band_position < self.close_band_ratio_lower
         
-        # === 조건 1-7 조합 ===
+        # === 모든 조건을 하나로 결합 ===
         cond_all = cond1 & cond2 & cond3 & cond4 & cond5 & cond6 & cond7
         
-        # === 중복 신호 제거 ===
+        # === 중복 신호 제거 (이미 신호가 발생한 후 N봉 이내에는 재진입 금지) ===
         prev_true_exists = cond_all.shift(1).rolling(self.window).max().fillna(False).astype(bool)
         signal = cond_all & (~prev_true_exists)
         
-        # 방향 배열 생성
+        # 방향 배열 (Long=1)
         direction = np.zeros(n, dtype=int)
         direction[signal.values] = 1
         

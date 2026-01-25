@@ -21,6 +21,12 @@ def _get_strategy_registry() -> Dict[str, Type[BaseSellStrategy]]:
     from .timeseries_sell_strategy import TimeseriesSellStrategy
     from .simple_ratio_sell_strategy import SimpleRatioSellStrategy
     
+    # New strategies
+    from .atr_trailing_stop_strategy import ATRTrailingStopStrategy
+    from .profit_target_ladder_strategy import ProfitTargetLadderStrategy
+    from .time_based_exit_strategy import TimeBasedExitStrategy
+    from .volatility_compression_exit_strategy import VolatilityCompressionExitStrategy
+    
     return {
         # VBT 청산 전략
         'bailout_sell': VBTSellStrategy,
@@ -40,6 +46,12 @@ def _get_strategy_registry() -> Dict[str, Type[BaseSellStrategy]]:
         'simple_ratio_sell': SimpleRatioSellStrategy,
         'simple_ratio_sell_quick': SimpleRatioSellStrategy,
         'ratio_sell': SimpleRatioSellStrategy,
+        
+        # New Strategies
+        'atr_trailing_stop': ATRTrailingStopStrategy,
+        'profit_target_ladder': ProfitTargetLadderStrategy,
+        'time_based_exit': TimeBasedExitStrategy,
+        'volatility_compression_exit': VolatilityCompressionExitStrategy,
     }
 
 

@@ -6,6 +6,7 @@ Buy Strategy 레지스트리
 """
 
 from typing import Dict, Type, List, Any
+import itertools
 from .base import BaseBuyStrategy
 
 
@@ -36,6 +37,12 @@ def _get_strategy_registry() -> Dict[str, Type[BaseBuyStrategy]]:
     # VBT Prev Candle 전략
     from .vbt_prev_candle_strategy import VBTPrevCandleStrategy
     
+    # New strategies
+    from .adaptive_vbt_strategy import AdaptiveVBTStrategy
+    from .volume_weighted_vbt_strategy import VolumeWeightedVBTStrategy
+    from .mean_reversion_momentum_strategy import MeanReversionMomentumStrategy
+    from .breakout_confirmation_strategy import BreakoutConfirmationStrategy
+    
     return {
         # VBT 전략
         'vbt_with_filters': VBTBuyStrategy,
@@ -60,6 +67,12 @@ def _get_strategy_registry() -> Dict[str, Type[BaseBuyStrategy]]:
         
         # VBT Prev Candle 전략
         'volatility_breakout_prev_candle': VBTPrevCandleStrategy,
+        
+        # New Strategies
+        'adaptive_vbt': AdaptiveVBTStrategy,
+        'volume_weighted_vbt': VolumeWeightedVBTStrategy,
+        'mean_reversion_momentum': MeanReversionMomentumStrategy,
+        'breakout_confirmation': BreakoutConfirmationStrategy,
     }
 
 
@@ -108,19 +121,34 @@ def get_all_buy_param_combinations(
     전략의 모든 파라미터 조합 생성
     
     Args:
-        strategy_name: 전략 이름
+    설정 파일(JSON)에 있는 리스트형 파라미터들로부터 모든 가능한 조합을 생성합니다.
+    
+    예를 들어:
+    config = {'window_list': [1, 2], 'k_list': [0.5, 0.6]} 이라면,
+    (1, 0.5), (1, 0.6), (2, 0.5), (2, 0.6) 총 4개의 파라미터 셋을 만들어 리턴합니다.
+    
+    Args:
+        strategy_name: 전략 이름 (현재 이 함수에서는 사용되지 않지만 인터페이스 일관성을 위해 유지)
         config: _list suffix를 포함한 설정
         
     Returns:
         파라미터 조합 리스트
     """
-    registry = _get_strategy_registry()
+    # '_list'로 끝나는 모든 키를 찾아 파라미터 후보군을 추출
+    param_keys = [k for k in config.keys() if k.endswith('_list')]
+    param_values = [config[k] for k in param_keys]
     
-    if strategy_name not in registry:
-        raise ValueError(f"Unknown buy strategy: {strategy_name}")
-    
-    strategy_class = registry[strategy_name]
-    return strategy_class.get_param_combinations(config)
+    combinations = []
+    # itertools.product를 사용하여 모든 조합(Cartesian Product) 생성
+    for values in itertools.product(*param_values):
+        params = {}
+        for key, value in zip(param_keys, values):
+            # '_list' 접미사를 제거하고 실제 파라미터 이름으로 저장
+            clean_key = key.replace('_list', '')
+            params[clean_key] = value
+        combinations.append(params)
+        
+    return combinations
 
 
 def create_strategies_from_config(config: Dict[str, Any]) -> List[BaseBuyStrategy]:
