@@ -1,0 +1,36 @@
+{
+  "coin_infos": {
+    "day-pb_du": {},
+    "minute240-pb_du": {
+      "KRW-XAUT": [
+        {
+          "buy_price": 7545770.999999995,
+          "balance": 0.08178953,
+          "buy_date": "202601260100",
+          "sell_uppers": [
+            1.15
+          ],
+          "sell_fractions": [
+            1.0
+          ]
+        }
+      ]
+    },
+    "minute60-pb_du": {
+      "KRW-SIGN": [
+        {
+          "buy_price": 62.03099999999961,
+          "balance": 8065.57490271,
+          "buy_date": "202601251600",
+          "sell_uppers": [
+            1.15
+          ],
+          "sell_fractions": [
+            1.0
+          ]
+        }
+      ]
+    }
+  },
+  "saved_at": "2026-01-26 09:02:24"
+}
