@@ -125,6 +125,7 @@ def explode_volume_volatility_breakout(
     
     df['signal'] = df['volume_signal'] & df['price_signal'] & df['utr_signal']
     
+    
     return df
 
 def explode_volume_breakout_2(

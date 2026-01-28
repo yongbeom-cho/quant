@@ -25,10 +25,10 @@ output_dir="${root_dir}/var/data"
 #     python ${root_dir}/sbin/data_pipeline/01_get_ohlcv_data.py --root_dir ${root_dir} --date ${date_arg} --market ${market} --interval ${interval} --output_dir ${output_dir}
 # done
 
-for d in {5..1}; do
+for d in {60..1}; do
     date_arg=$(date -v-"${d}"d +%Y%m%d)
-
-    for interval in minute1 minute3 minute5 minute10 minute15 minute30 minute60 minute240 week month day; do
+    # for interval in minute1 minute3 minute5 minute10 minute15 minute30 minute60 minute240 week month day; do
+    for interval in minute30 minute60 minute240 day week month; do
         python ${root_dir}/sbin/data_pipeline/01_get_ohlcv_data.py \
             --root_dir ${root_dir} \
             --date ${date_arg} \

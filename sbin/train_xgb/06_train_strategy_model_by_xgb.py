@@ -264,6 +264,7 @@ class Classifier:
 
 parser = argparse.ArgumentParser(description='06_train_strategy_model_by_xgb')
 parser.add_argument('--root_dir', type=str, default="/Users/yongbeom/cyb/project/2025/quant")
+parser.add_argument('--input_data_dir', type=str, default="/Users/yongbeom/cyb/project/2025/quant/var/xgb_data")
 parser.add_argument('--market', type=str, default="coin")
 parser.add_argument('--interval', type=str, default="minute60")
 parser.add_argument('--target_strategy_feature', type=str, default="low_bb_du")
@@ -274,7 +275,7 @@ args = parser.parse_args()
 
 if __name__ == "__main__":
     strategy_feature_name = args.target_strategy_feature
-    xgb_dir = os.path.join(args.root_dir, "var/xgb_data")
+    xgb_dir = args.input_data_dir
     table_base = f"xgb_{args.market}_{args.interval}_{args.target_strategy_feature}"
     model_name_base = f"xgb-{args.market}-{args.interval}-{args.target_strategy_feature}"
     print("######################## ", table_base, " ########################")

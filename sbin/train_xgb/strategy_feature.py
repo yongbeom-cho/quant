@@ -8,11 +8,15 @@ from strategy.xgb_strategy import apply_strategy_xgb_feats, get_feats_num
 def get_feats_and_labels_num(strategy_feature_name):
     if strategy_feature_name == 'low_bb_du':
         return get_feats_num(strategy_feature_name), 3
+    elif strategy_feature_name == 'pb_du':
+        return get_feats_num(strategy_feature_name), 3
     return 0, 0
 
 def get_strategy_feature_filtered_feature_and_labels(df, strategy_feature_name, interval='minute60'):
     if strategy_feature_name == 'low_bb_du':
         return low_bb_du(df, interval)
+    elif strategy_feature_name == 'pb_du':
+        return pb_du(df, interval)
     return None, 0, 0
 
 def label_df(df, label_name, upper, lower, max_cnt=9999):
@@ -56,6 +60,31 @@ def low_bb_du(df, interval):
     df = label_df(df, 'label2', 1.18, 0.85)
     
     feat_num, label_num = get_feats_and_labels_num("low_bb_du")
+
+    feat_cols = [f"feat{i}" for i in range(feat_num)]
+    label_cols = [f"label{i}" for i in range(label_num)]
+
+    assert len(feat_cols) == feat_num, "feat_cols 개수가 feat_num과 다름"
+    assert len(label_cols) == label_num, "label_cols 개수가 label_num 다름"
+    
+    need_cols = ['ticker', 'date', 'open', 'high', 'low', 'close', 'volume']
+
+    df = df[df['strategy_feature'] == True]
+    use_cols = feat_cols + need_cols + label_cols
+    df = df[use_cols].replace([np.inf, -np.inf], np.nan)
+    df = df.dropna(subset=feat_cols + need_cols)
+    df = df.dropna(subset=label_cols, how="all")
+    df = df.sample(frac=1, random_state=42).reset_index(drop=True)
+    return df
+
+def pb_du(df, interval):
+    df = apply_strategy_xgb_feats(df, interval, 'pb_du')
+    # print(df[df['strategy_feature'] == True]['strategy_feature'])
+    df = label_df(df, 'label0', 1.12, 0.9)
+    df = label_df(df, 'label1', 1.15, 0.875)
+    df = label_df(df, 'label2', 1.09, 0.925)
+    
+    feat_num, label_num = get_feats_and_labels_num("pb_du")
 
     feat_cols = [f"feat{i}" for i in range(feat_num)]
     label_cols = [f"label{i}" for i in range(label_num)]

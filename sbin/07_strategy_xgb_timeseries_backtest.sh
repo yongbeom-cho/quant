@@ -9,12 +9,13 @@ conda env config vars set PYTORCH_ENABLE_MPS_FALLBACK=1
 
 market=coin
 strategy_name=low_bb_du
+strategy_name=pb_du
 root_dir=$(cd .. && pwd)
 
-xgb_data_dir=${root_dir}/var/xgb_data.v3.0
-train_log_dir=${root_dir}/var/log/train_xgb.v3.0
-log_dir=${root_dir}/var/log/strategy_xgb_timeseries_backtest.v3.0
-model_dir=${root_dir}/var/xgb_model.v3.0
+xgb_data_dir=${root_dir}/var/xgb_${strategy_name}_data
+train_log_dir=${root_dir}/var/log/train_${strategy_name}_xgb
+log_dir=${root_dir}/var/log/strategy_${strategy_name}_xgb_timeseries_backtest
+model_dir=${root_dir}/var/xgb_${strategy_name}_model
 
 mkdir -p ${log_dir}
 
@@ -26,7 +27,6 @@ job_cnt=0
 for model in ${model_dir}/xgb-${market}-day-${strategy_name}* \
              ${model_dir}/xgb-${market}-minute240-${strategy_name}* \
              ${model_dir}/xgb-${market}-minute60-${strategy_name}*; do
-
     model_name="$(basename "$model")"
     tmp="${model_name#*-*-}"
     log_fname="${tmp%-*}"

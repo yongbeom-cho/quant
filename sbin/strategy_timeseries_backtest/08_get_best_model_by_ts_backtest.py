@@ -30,6 +30,8 @@ for fname in os.listdir(log_dir):
         continue
     if args.strategy_name not in fname:
         continue
+    if args.interval not in fname:
+        continue
 
     # 파일명 파싱
     # interval-target_strategy-label-min_precision-threshold.txt
