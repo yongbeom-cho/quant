@@ -24,25 +24,6 @@
     },
     {
         "index": 1,
-        "strategy_name": "bailout_sell_quick",
-        "description": "VBT 청산 전략 빠른 테스트용",
-        "sell_signal_config": {
-            "stop_loss_ratio_list": [
-                0.02
-            ],
-            "bailout_profit_days_list": [
-                1
-            ],
-            "bailout_no_profit_days_list": [
-                4
-            ],
-            "price_flow_sluggish_threshold_list": [
-                0.005
-            ]
-        }
-    },
-    {
-        "index": 2,
         "strategy_name": "timeseries_sell",
         "description": "분할 청산 전략 (상승시 분할매도)",
         "sell_signal_config": {
@@ -50,11 +31,11 @@
                 [
                     1.03,
                     1.06,
-                    1.10
+                    1.1
                 ],
                 [
                     1.05,
-                    1.10,
+                    1.1,
                     1.15
                 ],
                 [
@@ -74,56 +55,23 @@
         }
     },
     {
-        "index": 3,
-        "strategy_name": "timeseries_sell_quick",
-        "description": "분할 청산 전략 빠른 테스트용",
-        "sell_signal_config": {
-            "uppers_list": [
-                [
-                    1.03,
-                    1.06,
-                    1.10
-                ]
-            ],
-            "lower_list": [
-                0.95
-            ],
-            "close_lower_sell_list": [
-                false
-            ]
-        }
-    },
-    {
-        "index": 4,
+        "index": 2,
         "strategy_name": "simple_ratio_sell",
         "description": "단순 비율 청산 전략 (low_bb_dru용)",
         "sell_signal_config": {
             "low_limit_ratio_list": [
-                0.90,
+                0.9,
                 0.95
             ],
             "high_limit_ratio_list": [
-                1.10,
+                1.1,
                 1.11,
                 1.15
             ]
         }
     },
     {
-        "index": 5,
-        "strategy_name": "simple_ratio_sell_quick",
-        "description": "단순 비율 청산 전략 빠른 테스트용",
-        "sell_signal_config": {
-            "low_limit_ratio_list": [
-                0.90
-            ],
-            "high_limit_ratio_list": [
-                1.11
-            ]
-        }
-    },
-    {
-        "index": 6,
+        "index": 3,
         "strategy_name": "bailout_sell_enhanced",
         "description": "고도화된 VBT 청산 전략 (ATR 트레일링 스탑)",
         "sell_signal_config": {
@@ -150,24 +98,114 @@
         }
     },
     {
-        "index": 7,
-        "strategy_name": "bailout_sell_enhanced_quick",
-        "description": "고도화된 VBT 청산 전략 빠른 테스트용",
+        "index": 4,
+        "strategy_name": "atr_trailing_stop",
+        "description": "ATR 기반 동적 트레일링 스탑 청산 전략",
         "sell_signal_config": {
             "stop_loss_ratio_list": [
+                0.02,
+                0.03
+            ],
+            "atr_window_list": [
+                14
+            ],
+            "trailing_atr_mult_list": [
+                1.5,
+                2.0,
+                2.5
+            ],
+            "min_profit_for_trailing_list": [
+                0.01
+            ],
+            "profit_target_ratio_list": [
+                0.1,
+                0.15
+            ],
+            "max_holding_days_list": [
+                7,
+                10
+            ]
+        }
+    },
+    {
+        "index": 5,
+        "strategy_name": "profit_target_ladder",
+        "description": "단계별 익절 청산 전략",
+        "sell_signal_config": {
+            "stop_loss_ratio_list": [
+                0.03
+            ],
+            "target1_list": [
+                0.05,
+                0.07
+            ],
+            "target2_list": [
+                0.1
+            ],
+            "target3_list": [
+                0.15
+            ],
+            "ladder1_pct_list": [
+                0.3
+            ],
+            "ladder2_pct_list": [
+                0.3
+            ],
+            "max_holding_days_list": [
+                10
+            ]
+        }
+    },
+    {
+        "index": 6,
+        "strategy_name": "time_based_exit",
+        "description": "시간 + 수익 기반 청산 전략",
+        "sell_signal_config": {
+            "stop_loss_ratio_list": [
+                0.03
+            ],
+            "day1_profit_list": [
+                0.05
+            ],
+            "day3_profit_list": [
+                0.03
+            ],
+            "day5_profit_list": [
+                0.01
+            ],
+            "day7_profit_list": [
+                0.0
+            ],
+            "max_holding_days_list": [
+                10
+            ]
+        }
+    },
+    {
+        "index": 7,
+        "strategy_name": "volatility_compression_exit",
+        "description": "변동성 압축 청산 전략",
+        "sell_signal_config": {
+            "stop_loss_ratio_list": [
+                0.03
+            ],
+            "atr_window_list": [
+                14
+            ],
+            "atr_compression_ratio_list": [
+                0.5
+            ],
+            "bb_window_list": [
+                20
+            ],
+            "bb_compression_threshold_list": [
                 0.02
             ],
-            "trailing_stop_mult_list": [
-                3.0
+            "min_profit_list": [
+                0.01
             ],
-            "min_profit_ratio_list": [
-                0.005
-            ],
-            "bailout_profit_days_list": [
-                1
-            ],
-            "bailout_no_profit_days_list": [
-                4
+            "max_holding_days_list": [
+                10
             ]
         }
     }
