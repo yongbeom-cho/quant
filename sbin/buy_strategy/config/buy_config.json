@@ -1,0 +1,597 @@
+[
+    {
+        "index": 0,
+        "strategy_name": "vbt_with_filters",
+        "description": "변동성 돌파 전략 (EMA, RSI, 거래량 필터)",
+        "buy_signal_config": {
+            "window_list": [
+                5,
+                10
+            ],
+            "k_long_list": [
+                0.4,
+                0.5,
+                0.6
+            ],
+            "k_short_list": [
+                0.4,
+                0.5,
+                0.6
+            ],
+            "ema_period_list": [
+                15,
+                20
+            ],
+            "rsi_period_list": [
+                8,
+                14
+            ],
+            "rsi_upper_list": [
+                70
+            ],
+            "rsi_lower_list": [
+                30
+            ],
+            "use_std_list": [
+                false,
+                true
+            ],
+            "std_mult_list": [
+                1.0
+            ],
+            "volume_window_list": [
+                20
+            ],
+            "volume_mult_list": [
+                1.0,
+                1.5
+            ],
+            "volatility_window_list": [
+                20
+            ],
+            "volatility_threshold_list": [
+                0.0,
+                0.005
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 1,
+        "strategy_name": "low_bb_dru",
+        "description": "볼린저 밴드 하단 반등 전략 (minute60용)",
+        "buy_signal_config": {
+            "window_list": [
+                3,
+                4,
+                5
+            ],
+            "co_upper_list": [
+                1.002,
+                1.003
+            ],
+            "close_band_ratio_lower_list": [
+                0.25,
+                0.4,
+                0.5
+            ],
+            "prev_co_and_lc_range": [
+                1.001,
+                0.98
+            ],
+            "over_sell_threshold_list": [
+                25,
+                31
+            ],
+            "cond6_idx_list": [
+                0,
+                2,
+                3
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 2,
+        "strategy_name": "vbt_with_filters_enhanced",
+        "description": "고도화된 변동성 돌파 전략 (ADX, ATR 추가)",
+        "buy_signal_config": {
+            "k_long_list": [
+                0.4,
+                0.5,
+                0.6
+            ],
+            "k_short_list": [
+                0.4,
+                0.5,
+                0.6
+            ],
+            "ema_confirm_list": [
+                true
+            ],
+            "ema_period_list": [
+                20
+            ],
+            "rsi_confirm_list": [
+                false,
+                true
+            ],
+            "rsi_period_list": [
+                14
+            ],
+            "rsi_upper_list": [
+                70
+            ],
+            "rsi_lower_list": [
+                30
+            ],
+            "adx_period_list": [
+                14
+            ],
+            "adx_threshold_list": [
+                20.0,
+                25.0
+            ],
+            "atr_period_list": [
+                14
+            ],
+            "atr_mult_list": [
+                1.0
+            ],
+            "volume_window_list": [
+                20
+            ],
+            "volume_mult_list": [
+                1.0
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 3,
+        "strategy_name": "explode_volume_breakout",
+        "description": "거래량 폭발 + 가격 돌파 전략",
+        "buy_signal_config": {
+            "window_list": [
+                120,
+                240
+            ],
+            "prev_top_vol_del_ratio_list": [
+                0.0,
+                0.1
+            ],
+            "vol_ratio_list": [
+                100,
+                150
+            ],
+            "co_ratio_list": [
+                1.015,
+                1.02,
+                1.025
+            ],
+            "utr_list": [
+                0.9,
+                0.95
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 4,
+        "strategy_name": "explode_volume_volatility_breakout",
+        "description": "거래량 폭발 + 변동성 돌파 전략",
+        "buy_signal_config": {
+            "window_list": [
+                120,
+                240
+            ],
+            "prev_top_vol_del_ratio_list": [
+                0.0,
+                0.1
+            ],
+            "vol_ratio_list": [
+                100,
+                150
+            ],
+            "k_list": [
+                3.0,
+                4.0,
+                5.0
+            ],
+            "utr_list": [
+                0.9,
+                0.95
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 5,
+        "strategy_name": "explode_volume_breakout_2",
+        "description": "거래량 폭발 V2 + 가격 돌파 전략 (장기/단기 거래량)",
+        "buy_signal_config": {
+            "window_list": [
+                120,
+                240
+            ],
+            "vol_ratio_list": [
+                100,
+                150
+            ],
+            "short_window_list": [
+                2,
+                5
+            ],
+            "short_vol_ratio_list": [
+                50,
+                80
+            ],
+            "co_ratio_list": [
+                1.015,
+                1.02,
+                1.025
+            ],
+            "utr_list": [
+                0.9,
+                0.95
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 6,
+        "strategy_name": "explode_volume_volatility_breakout_2",
+        "description": "거래량 폭발 V2 + 변동성 돌파 전략 (장기/단기 거래량)",
+        "buy_signal_config": {
+            "window_list": [
+                120,
+                240
+            ],
+            "vol_ratio_list": [
+                100,
+                150
+            ],
+            "short_window_list": [
+                2,
+                5
+            ],
+            "short_vol_ratio_list": [
+                50,
+                80
+            ],
+            "k_list": [
+                3.0,
+                4.0,
+                5.0
+            ],
+            "utr_list": [
+                0.9,
+                0.95
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 7,
+        "strategy_name": "low_bb_du",
+        "description": "볼린저 밴드 하단 반등 전략 (올바른 GC)",
+        "buy_signal_config": {
+            "window_list": [
+                1,
+                2,
+                3,
+                4
+            ],
+            "close_band_ratio_lower_list": [
+                0.5,
+                0.35,
+                0.2
+            ],
+            "ol_hl_ratio_upper_list": [
+                0.0,
+                0.15,
+                0.3,
+                0.45
+            ],
+            "close_open_ratio_upper_list": [
+                1.0,
+                1.0025,
+                1.005,
+                1.0075,
+                1.01
+            ],
+            "over_sell_threshold_list": [
+                20,
+                25,
+                30
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 8,
+        "strategy_name": "low_bb_du_2",
+        "description": "볼린저 밴드 하단 반등 V2 전략 (7조건, 올바른 GC)",
+        "buy_signal_config": {
+            "window_list": [
+                1,
+                2,
+                3,
+                4,
+                5
+            ],
+            "co_ratio_range_list": [
+                [
+                    1.0,
+                    1.07
+                ],
+                [
+                    1.005,
+                    1.07
+                ],
+                [
+                    1.01,
+                    1.07
+                ],
+                [
+                    1.005,
+                    1.035
+                ],
+                [
+                    1.0,
+                    1.035
+                ]
+            ],
+            "over_sell_threshold_list": [
+                25,
+                31,
+                19
+            ],
+            "cwlc_ratio_lower_list": [
+                1.06,
+                1.12
+            ],
+            "lo_ratio_lower_list": [
+                0.99,
+                0.98
+            ],
+            "close_band_ratio_lower_list": [
+                0.4,
+                0.2
+            ],
+            "cond3_idx_list": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 9,
+        "strategy_name": "low_bb_du_3",
+        "description": "볼린저 밴드 하단 반등 전략 (역방향 GC, 레거시)",
+        "buy_signal_config": {
+            "window_list": [
+                1,
+                2,
+                3,
+                4
+            ],
+            "close_band_ratio_lower_list": [
+                0.5,
+                0.35,
+                0.2
+            ],
+            "ol_hl_ratio_upper_list": [
+                0.0,
+                0.15,
+                0.3,
+                0.45
+            ],
+            "close_open_ratio_upper_list": [
+                1.0,
+                1.0025,
+                1.005,
+                1.0075,
+                1.01
+            ],
+            "over_sell_threshold_list": [
+                20,
+                25,
+                30
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 10,
+        "strategy_name": "low_bb_du_4",
+        "description": "볼린저 밴드 하단 반등 V2 전략 (7조건, 역방향 GC)",
+        "buy_signal_config": {
+            "window_list": [
+                1,
+                2,
+                3,
+                4,
+                5
+            ],
+            "co_ratio_range_list": [
+                [
+                    1.0,
+                    1.07
+                ],
+                [
+                    1.005,
+                    1.07
+                ],
+                [
+                    1.01,
+                    1.07
+                ],
+                [
+                    1.005,
+                    1.035
+                ],
+                [
+                    1.0,
+                    1.035
+                ]
+            ],
+            "over_sell_threshold_list": [
+                25,
+                31,
+                19
+            ],
+            "cwlc_ratio_lower_list": [
+                1.06,
+                1.12
+            ],
+            "lo_ratio_lower_list": [
+                0.99,
+                0.98
+            ],
+            "close_band_ratio_lower_list": [
+                0.4,
+                0.2
+            ],
+            "cond3_idx_list": [
+                0,
+                1,
+                2,
+                5,
+                6,
+                7
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 11,
+        "strategy_name": "volatility_breakout_prev_candle",
+        "description": "직전 봉 레인지 기반 변동성 돌파 전략",
+        "buy_signal_config": {
+            "k_list": [
+                0.3,
+                0.4,
+                0.5,
+                0.6,
+                0.7
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 12,
+        "strategy_name": "adaptive_vbt",
+        "description": "적응형 변동성 돌파 전략 (동적 k 값 조정)",
+        "buy_signal_config": {
+            "base_k_list": [
+                0.4,
+                0.5,
+                0.6
+            ],
+            "volatility_window_list": [
+                14,
+                20
+            ],
+            "k_adjustment_factor_list": [
+                0.2,
+                0.3
+            ],
+            "min_k_list": [
+                0.2
+            ],
+            "max_k_list": [
+                0.8
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 13,
+        "strategy_name": "volume_weighted_vbt",
+        "description": "거래량 가중 변동성 돌파 전략",
+        "buy_signal_config": {
+            "base_k_list": [
+                0.4,
+                0.5
+            ],
+            "volume_window_list": [
+                20
+            ],
+            "volume_threshold_list": [
+                1.0,
+                1.2
+            ],
+            "surge_threshold_list": [
+                2.0
+            ],
+            "weak_threshold_list": [
+                0.8
+            ],
+            "surge_k_mult_list": [
+                0.8
+            ],
+            "weak_k_mult_list": [
+                1.2
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 14,
+        "strategy_name": "mean_reversion_momentum",
+        "description": "평균 회귀 + 모멘텀 확인 전략",
+        "buy_signal_config": {
+            "bb_window_list": [
+                20
+            ],
+            "bb_std_list": [
+                2.0
+            ],
+            "rsi_period_list": [
+                14
+            ],
+            "rsi_threshold_list": [
+                30
+            ],
+            "momentum_bars_list": [
+                3
+            ],
+            "momentum_required_list": [
+                2
+            ],
+            "volume_threshold_list": [
+                1.0
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 15,
+        "strategy_name": "breakout_confirmation",
+        "description": "확인된 돌파 전략",
+        "buy_signal_config": {
+            "close_threshold_list": [
+                0.01
+            ],
+            "volume_mult_list": [
+                2.0
+            ],
+            "atr_period_list": [
+                14
+            ],
+            "atr_threshold_list": [
+                0.01
+            ],
+            "max_investment_ratio": 1.0
+        }
+    }
+]
