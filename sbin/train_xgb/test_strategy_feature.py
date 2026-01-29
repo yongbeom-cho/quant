@@ -82,139 +82,64 @@ def label_df(df, label_name, upper, lower):
     df[label_name] = labels
     return df
 
-def test(df, idx):
+def test(df, target_idx):
     
     df['bb_upper'], df['bb_mid'], df['bb_lower'] = talib.BBANDS(df['close'], timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
-    df['stoch_k'], df['stoch_d'] = talib.STOCH(
-        df['high'],
-        df['low'],
-        df['close'],
-        fastk_period=14,
-        slowk_period=3,
-        slowk_matype=0,
-        slowd_period=3,
-        slowd_matype=0
-    )
-    sma20 = talib.SMA(df['close'], timeperiod=20)
-    sma40 = talib.SMA(df['close'], timeperiod=40)
-    sma60 = talib.SMA(df['close'], timeperiod=60)
-    sma100 = talib.SMA(df['close'], timeperiod=100)
-    # df['strategy_feature'] = (df['close'] > df['bb_lower']) & (df['open'] < df['bb_lower'])
-    if idx == 0:
-        df['strategy_feature'] = True
-    elif idx == 1:
-        df['strategy_feature'] = (df['close'] > df['bb_lower']) & (df['open'] < df['bb_lower'])
-    elif idx == 2:
-        cond4_raw = ((df['close'] < df['bb_lower']) & ((df['close'] / df['open']) < 1.0))
-        df['cond'] = (cond4_raw.shift(1).rolling(2).max().fillna(False).astype(bool))
-        df['strategy_feature'] = (df['close'] > df['bb_lower']) & (df['open'] > df['bb_lower']) & (df['cond'])
-    elif idx == 3:
-        df['strategy_feature'] = (df['stoch_k'] < 30) & (df['close'] > df['bb_lower'])
-    elif idx == 4:
-        df['strategy_feature'] = (df['stoch_k'] < 30) & (df['close'] < df['bb_lower'])
-    elif idx == 5:
-        df['strategy_feature'] = (df['stoch_k'] < 30) & ((df['stoch_d'] < df['stoch_k']) & (df['stoch_d'].shift(1) > df['stoch_k'].shift(1)))
-    elif idx == 6:
-        df['strategy_feature'] = (df['stoch_k'] < 30) & ((df['stoch_d'] > df['stoch_d'].shift(1)) & (df['stoch_k'] > df['stoch_k'].shift(1)))
-    elif idx == 7:
-        df['strategy_feature'] = (df['stoch_k'] < 30) & ((df['stoch_d'] > df['stoch_d'].shift(1)) & (df['stoch_k'] > df['stoch_k'].shift(1))) & (df['close'] < df['bb_lower'])
-    elif idx == 8:
-        df['strategy_feature'] = (df['stoch_k'] < 30) & ((df['stoch_d'] > df['stoch_d'].shift(1)) & (df['stoch_k'] > df['stoch_k'].shift(1))) & (df['close'] > df['bb_lower'])
-    elif idx == 9:
-        df['aa'] = (df['close'] > df['bb_lower']) & (df['open'] > df['bb_lower'])
-        cond_raw = ((df['close'] < df['bb_lower']) & ((df['close'] / df['open']) < 1.0))
-        df['cond'] = (cond_raw.shift(1).rolling(2).max().fillna(False).astype(bool))
-        df['strategy_feature'] = df['aa'] & df['aa'].shift(1) & (df['cond'])
-    elif idx == 10:
-        df['aa'] = (df['close'] > df['bb_lower']) & (df['open'] > df['bb_lower'])
-        cond_raw = ((df['close'] < df['bb_lower']) & ((df['close'] / df['open']) < 1.0))
-        df['cond'] = (cond_raw.shift(1).rolling(2).max().fillna(False).astype(bool))
-        df['strategy_feature'] = df['aa'] & df['aa'].shift(1) & (df['cond']) & (df['stoch_k'] < 30)
-    elif idx == 11:
-        df['aa'] = (df['close'] > df['bb_lower']) & (df['open'] > df['bb_lower'])
-        cond_raw = ((df['close'] < df['bb_lower']) & ((df['close'] / df['open']) < 1.0))
-        df['cond'] = (cond_raw.shift(1).rolling(2).max().fillna(False).astype(bool))
-        df['strategy_feature'] = df['aa'] & df['aa'].shift(1) & (df['cond']) & (df['close'] > df['open'])
-    elif idx == 12:
-        df['aa'] = (df['close'] > df['bb_lower']) & (df['open'] > df['bb_lower'])
-        cond_raw = ((df['close'] < df['bb_lower']) & ((df['close'] / df['open']) < 1.0))
-        df['cond'] = (cond_raw.shift(1).rolling(2).max().fillna(False).astype(bool))
-        df['strategy_feature'] = df['aa'] & df['aa'].shift(1) & (df['cond']) & (df['close'] < df['bb_mid'])
-    elif idx == 13:
-        df['aa'] = (df['close'] > df['bb_lower']) & (df['open'] > df['bb_lower'])
-        cond_raw = ((df['close'] < df['bb_lower']) & ((df['close'] / df['open']) < 1.0))
-        df['cond'] = (cond_raw.shift(1).rolling(2).max().fillna(False).astype(bool))
-        df['under'] = df['bb_lower'] + (df['bb_mid'] - df['bb_lower']) / 2
-        df['strategy_feature'] = df['aa'] & df['aa'].shift(1) & (df['cond']) & (df['close'] < df['under'])
-    elif idx == 14:
-        df['strategy_feature'] = (df['close'] > df['bb_lower']) & (df['open'] < df['bb_lower']) & (sma100 > sma100.shift(4))
-    elif idx == 15:
-        df['strategy_feature'] = (df['close'] > df['bb_lower']) & (df['open'] < df['bb_lower']) & (sma100 > sma100.shift(14))
-    elif idx == 16:
-        df['strategy_feature'] = (df['close'] > df['bb_lower']) & (df['open'] < df['bb_lower']) & (sma100 > sma100.shift(24))
-    elif idx == 17:
-        df['strategy_feature'] = (df['close'] > df['bb_lower']) & (df['open'] < df['bb_lower']) & (sma60 > sma60.shift(4))
-    elif idx == 18:
-        df['strategy_feature'] = (df['close'] > df['bb_lower']) & (df['open'] < df['bb_lower']) & (sma60 > sma60.shift(14))
-    elif idx == 19:
-        df['strategy_feature'] = (df['close'] > df['bb_lower']) & (df['open'] < df['bb_lower']) & (sma60 > sma60.shift(24))
-    elif idx == 20:
-        cond4_raw = ((df['close'] < df['bb_lower']) & ((df['close'] / df['open']) < 1.0))
-        df['cond'] = (cond4_raw.shift(1).rolling(2).max().fillna(False).astype(bool))
-        df['strategy_feature'] = (df['close'] > df['bb_lower']) & (df['open'] > df['bb_lower']) & (df['cond']) & (sma100 > sma100.shift(4))
-    elif idx == 21:
-        cond4_raw = ((df['close'] < df['bb_lower']) & ((df['close'] / df['open']) < 1.0))
-        df['cond'] = (cond4_raw.shift(1).rolling(2).max().fillna(False).astype(bool))
-        df['strategy_feature'] = (df['close'] > df['bb_lower']) & (df['open'] > df['bb_lower']) & (df['cond']) & (sma100 > sma100.shift(14))
-    elif idx == 22:
-        cond4_raw = ((df['close'] < df['bb_lower']) & ((df['close'] / df['open']) < 1.0))
-        df['cond'] = (cond4_raw.shift(1).rolling(2).max().fillna(False).astype(bool))
-        df['strategy_feature'] = (df['close'] > df['bb_lower']) & (df['open'] > df['bb_lower']) & (df['cond']) & (sma100 > sma100.shift(24))
-    elif idx == 23:
-        cond4_raw = ((df['close'] < df['bb_lower']) & ((df['close'] / df['open']) < 1.0))
-        df['cond'] = (cond4_raw.shift(1).rolling(2).max().fillna(False).astype(bool))
-        df['strategy_feature'] = (df['close'] > df['bb_lower']) & (df['open'] > df['bb_lower']) & (df['cond']) & (sma60 > sma60.shift(4))
-    elif idx == 24:
-        cond4_raw = ((df['close'] < df['bb_lower']) & ((df['close'] / df['open']) < 1.0))
-        df['cond'] = (cond4_raw.shift(1).rolling(2).max().fillna(False).astype(bool))
-        df['strategy_feature'] = (df['close'] > df['bb_lower']) & (df['open'] > df['bb_lower']) & (df['cond']) & (sma60 > sma100.shift(14))
-    elif idx == 25:
-        cond4_raw = ((df['close'] < df['bb_lower']) & ((df['close'] / df['open']) < 1.0))
-        df['cond'] = (cond4_raw.shift(1).rolling(2).max().fillna(False).astype(bool))
-        df['strategy_feature'] = (df['close'] > df['bb_lower']) & (df['open'] > df['bb_lower']) & (df['cond']) & (sma100 > sma60.shift(24))
+    df['pb'] = (df['close'] - df['bb_lower']) / (df['bb_upper'] - df['bb_lower'])
+    df['pb_sma20'] = talib.SMA(df['pb'], timeperiod=20)
+    df['pb_sma40'] = talib.SMA(df['pb'], timeperiod=40)
+    df['pb_sma60'] = talib.SMA(df['pb'], timeperiod=60)
+    df['pb_sma100'] = talib.SMA(df['pb'], timeperiod=100)
+    df['pb_sma200'] = talib.SMA(df['pb'], timeperiod=200)
 
-
-    df = label_df(df, 'label', 1.12, 0.9)
-    filtered_df = df[df['strategy_feature']]
-    pos_cnt = (df['label'] == 1).sum()
-    neg_cnt = (df['label'] == 0).sum()
-    return pos_cnt, neg_cnt
+    pb_sma_periods = [20, 40, 60, 100, 200] #5
+    pb_smas =[0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8] #7
+    pbs = [0.8, 0.7, 0.6, 0.5, 0.4, 0.3] #6
+    
+    idx = -1
+    for pb_sma_period in pb_sma_periods:
+        for pb_sma in pb_smas:
+            for pb in pbs:
+                idx += 1
+                if idx != target_idx:
+                    continue
+                param_name = str(pb_sma_period) + '_' + str(pb_sma) + '_' + str(pb)
+                df['strategy_feature'] = (df['pb'] > df['pb'].shift(1)) & (df['pb'].shift(1) < pb) & (df['pb'] > pb) & (df['pb_sma' + str(pb_sma_period)] > pb_sma)
+                df = label_df(df, 'label', 1.12, 0.9)
+                filtered_df = df[df['strategy_feature']]
+                pos_cnt = (df['label'] == 1).sum()
+                neg_cnt = (df['label'] == 0).sum()
+                return pos_cnt, neg_cnt, param_name
 
 
 
 parser = argparse.ArgumentParser(description='08_test_strategy_feature')
 parser.add_argument('--root_dir', type=str, default="/Users/yongbeom/cyb/project/2025/quant")
 parser.add_argument('--market', type=str, default="coin")
-# parser.add_argument('--interval', type=str, default="minute60")
+parser.add_argument('--interval', type=str, default="minute60")
+parser.add_argument('--parallel', type=int, default=8)
+parser.add_argument('--part', type=int, default=0)
+
 
 args = parser.parse_args()
 
 
-for interval in ['minute60', 'minute240', 'day']:
-    table_name = f'{args.market}_ohlcv_{interval}'
-    db_path = os.path.join(args.root_dir, f'var/data/{table_name}.db')
-    xgb_dir = os.path.join(args.root_dir, "var/xgb_data")
-    os.makedirs(xgb_dir, exist_ok=True)
+interval = args.interval
 
-    tickers = get_tickers(db_path, table_name)
-    for idx in range(1, 26):
-        pos_cnt = 0
-        neg_cnt = 0
-        for ticker in tickers:
-            df = load_ohlcv(db_path, table_name, ticker)
-            if len(df) <= 50:
-                continue
-            p_cnt, n_cnt = test(df, idx)
-            pos_cnt += p_cnt
-            neg_cnt += n_cnt
-        print(idx, interval, pos_cnt, neg_cnt, "%.3f" %(pos_cnt/float(pos_cnt+neg_cnt)))
+table_name = f'{args.market}_ohlcv_{interval}'
+db_path = os.path.join(args.root_dir, f'var/data/{table_name}.db')
+tickers = get_tickers(db_path, table_name)
+
+for idx in range(210):
+    if idx % args.parallel != args.part:
+        continue
+    pos_cnt = 0
+    neg_cnt = 0
+    for ticker in tickers:
+        df = load_ohlcv(db_path, table_name, ticker)
+        if len(df) <= 220:
+            continue
+        p_cnt, n_cnt, param_name = test(df, idx)
+        pos_cnt += p_cnt
+        neg_cnt += n_cnt
+    print(idx, param_name, interval, pos_cnt, neg_cnt, "%.3f" %(pos_cnt/float(pos_cnt+neg_cnt)))
