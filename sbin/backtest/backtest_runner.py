@@ -383,15 +383,16 @@ Examples:
         print("Error: No data loaded. Check DB path and parameters.")
         sys.exit(1)
     
-    # === 4. 전략 조합 정보 ===
+    # === 4. max_position_cnts 파싱 ===
+    max_position_cnts = [int(x.strip()) for x in args.max_position_cnts.split(',')]
+    
+    # === 5. 전략 조합 정보 ===
     print("\n=== [3/4] Strategy Combinations ===")
     print(f"Buy strategies: {len(buy_strategies)} combinations")
     print(f"Sell strategies: {len(sell_strategies)} combinations")
-    print(f"Total combinations: {len(buy_strategies) * len(sell_strategies)}")
-    
-    # === 5. max_position_cnts 파싱 ===
-    max_position_cnts = [int(x.strip()) for x in args.max_position_cnts.split(',')]
-    print(f"max_position_cnts: {max_position_cnts}")
+    print(f"max_position_cnts: {max_position_cnts} ({len(max_position_cnts)} values)")
+    total_combinations = len(buy_strategies) * len(sell_strategies) * len(max_position_cnts)
+    print(f"Total combinations: {total_combinations}")
     
     # === 6. 백테스트 실행 (핵심 시뮬레이션 환경 구축) ===
     print("\n=== [4/4] Running Backtest ===")
