@@ -20,28 +20,16 @@ def _get_strategy_registry() -> Dict[str, Type[BaseBuyStrategy]]:
     """
     from .vbt_strategy import VBTBuyStrategy
     from .vbt_enhanced_strategy import VBTEnhancedBuyStrategy
-    from .low_bb_dru_strategy import LowBBDRUBuyStrategy
-    
-    # Explode Volume 전략들
-    from .explode_volume_breakout_strategy import ExplodeVolumeBreakoutStrategy
-    from .explode_volume_volatility_breakout_strategy import ExplodeVolumeVolatilityBreakoutStrategy
-    from .explode_volume_breakout_2_strategy import ExplodeVolumeBreakout2Strategy
-    from .explode_volume_volatility_breakout_2_strategy import ExplodeVolumeVolatilityBreakout2Strategy
-    
-    # Low BB DU 전략들
-    from .low_bb_du_strategy import LowBBDUStrategy
-    from .low_bb_du_2_strategy import LowBBDU2Strategy
-    from .low_bb_du_3_strategy import LowBBDU3Strategy
-    from .low_bb_du_4_strategy import LowBBDU4Strategy
+    from .pb_rebound_strategy import PBReboundBuyStrategy
     
     # VBT Prev Candle 전략
     from .vbt_prev_candle_strategy import VBTPrevCandleStrategy
     
     # New strategies
-    from .adaptive_vbt_strategy import AdaptiveVBTStrategy
-    from .volume_weighted_vbt_strategy import VolumeWeightedVBTStrategy
-    from .mean_reversion_momentum_strategy import MeanReversionMomentumStrategy
-    from .breakout_confirmation_strategy import BreakoutConfirmationStrategy
+    # from .adaptive_vbt_strategy import AdaptiveVBTStrategy
+    # from .volume_weighted_vbt_strategy import VolumeWeightedVBTStrategy
+    # from .mean_reversion_momentum_strategy import MeanReversionMomentumStrategy
+    # from .breakout_confirmation_strategy import BreakoutConfirmationStrategy
     
     return {
         # VBT 전략
@@ -50,29 +38,17 @@ def _get_strategy_registry() -> Dict[str, Type[BaseBuyStrategy]]:
         # VBT Enhanced 전략
         'vbt_with_filters_enhanced': VBTEnhancedBuyStrategy,
         
-        # Bollinger Band DRU 전략
-        'low_bb_dru': LowBBDRUBuyStrategy,
-        
-        # Explode Volume 전략들
-        'explode_volume_breakout': ExplodeVolumeBreakoutStrategy,
-        'explode_volume_volatility_breakout': ExplodeVolumeVolatilityBreakoutStrategy,
-        'explode_volume_breakout_2': ExplodeVolumeBreakout2Strategy,
-        'explode_volume_volatility_breakout_2': ExplodeVolumeVolatilityBreakout2Strategy,
-        
-        # Low BB DU 전략들
-        'low_bb_du': LowBBDUStrategy,
-        'low_bb_du_2': LowBBDU2Strategy,
-        'low_bb_du_3': LowBBDU3Strategy,
-        'low_bb_du_4': LowBBDU4Strategy,
+        # Bollinger Band (Percent B) Rebound 전략
+        'pb_rebound': PBReboundBuyStrategy,
         
         # VBT Prev Candle 전략
         'volatility_breakout_prev_candle': VBTPrevCandleStrategy,
         
-        # New Strategies
-        'adaptive_vbt': AdaptiveVBTStrategy,
-        'volume_weighted_vbt': VolumeWeightedVBTStrategy,
-        'mean_reversion_momentum': MeanReversionMomentumStrategy,
-        'breakout_confirmation': BreakoutConfirmationStrategy,
+        # # New Strategies
+        # 'adaptive_vbt': AdaptiveVBTStrategy,
+        # 'volume_weighted_vbt': VolumeWeightedVBTStrategy,
+        # 'mean_reversion_momentum': MeanReversionMomentumStrategy,
+        # 'breakout_confirmation': BreakoutConfirmationStrategy,
     }
 
 

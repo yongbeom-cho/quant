@@ -10,37 +10,37 @@
 
 # 1. 기본 사용 (첫번째 config만 사용)
 python sbin/backtest/backtest_runner.py \\
-    --buy_config sbin/buy_strategy/config/vbt_config.json \\
+    --buy_config sbin/buy_strategy/config/buy_config.json \\
     --sell_config sbin/sell_strategy/config/sell_config.json \\
     --market coin --interval minute60
 
 # 2. 모든 buy config + 모든 sell config 조합 (전체 테스트)
 python sbin/backtest/backtest_runner.py \\
-    --buy_config sbin/buy_strategy/config/vbt_config.json --buy_config_idx all \\
+    --buy_config sbin/buy_strategy/config/buy_config.json --buy_config_idx all \\
     --sell_config sbin/sell_strategy/config/sell_config.json --sell_config_idx all \\
     --market coin --interval minute60
 
 # 3. 특정 config 인덱스 지정
 python sbin/backtest/backtest_runner.py \\
-    --buy_config sbin/buy_strategy/config/vbt_config.json --buy_config_idx 0 1 \\
+    --buy_config sbin/buy_strategy/config/buy_config.json --buy_config_idx 0 1 \\
     --sell_config sbin/sell_strategy/config/sell_config.json --sell_config_idx 0 2 \\
     --market coin --interval minute60
 
 # 4. 결과를 승률/MDD 기준으로 정렬
 python sbin/backtest/backtest_runner.py \\
-    --buy_config sbin/buy_strategy/config/vbt_config.json \\
+    --buy_config sbin/buy_strategy/config/buy_config.json \\
     --sell_config sbin/sell_strategy/config/sell_config.json \\
     --sort_by win_ratio --top_n 20
 
 # 5. 특정 종목만 테스트
 python sbin/backtest/backtest_runner.py \\
-    --buy_config sbin/buy_strategy/config/vbt_config.json \\
+    --buy_config sbin/buy_strategy/config/buy_config.json \\
     --sell_config sbin/sell_strategy/config/sell_config.json \\
     --ticker KRW-BTC,KRW-ETH
 
 # 6. 결과를 CSV로 저장
 python sbin/backtest/backtest_runner.py \\
-    --buy_config sbin/buy_strategy/config/vbt_config.json \\
+    --buy_config sbin/buy_strategy/config/buy_config.json \\
     --sell_config sbin/sell_strategy/config/sell_config.json \\
     --output results.csv
 
@@ -271,12 +271,13 @@ Examples:
                         help='Commission fee (default: 0.0005 = 0.05%%)')
     parser.add_argument('--slippage_fee', type=float, default=0.002,
                         help='Slippage fee (default: 0.002 = 0.2%%)')
-    
-    # 다중 포지션 설정 (분할 매수)
+    parser.add_argument('--initial_capital', type=float, default=1.0,
+                        help='Initial capital (default: 1.0)')
+    # 다중 포지션 설정 (매수)
     parser.add_argument('--max_positions', type=int, default=1,
                         help='Maximum number of concurrent positions per ticker (default: 1)')
-    parser.add_argument('--entry_capital_ratio', type=float, default=1.0,
-                        help='Capital ratio to use for each entry (default: 1.0 = 100%%)')
+    parser.add_argument('--is_timeseries_backtest', action='store_true',
+                        help='Use timeseries backtest mode (default: False)')
     
     # 병렬 처리 설정
     parser.add_argument('--parallel', action='store_true',
@@ -390,12 +391,12 @@ Examples:
     
     # === 5. 백테스트 실행 (핵심 시뮬레이션 환경 구축) ===
     print("\n=== [4/4] Running Backtest ===")
-    print(f"Settings: max_positions={args.max_positions}, entry_capital_ratio={args.entry_capital_ratio}")
+    print(f"Settings: max_positions={args.max_positions}")
     engine = UnifiedBacktestEngine(
         commission_fee=args.commission_fee,
         slippage_fee=args.slippage_fee,
-        max_positions=args.max_positions,
-        entry_capital_ratio=args.entry_capital_ratio
+        initial_capital=args.initial_capital,
+        max_positions=args.max_positions
     )
     
     # 병렬 또는 순차 실행 선택
@@ -406,6 +407,7 @@ Examples:
             data=data,
             buy_strategies=buy_strategies,
             sell_strategies=sell_strategies,
+            is_timeseries_backtest=args.is_timeseries_backtest,
             n_workers=args.workers,
             checkpoint_interval=args.checkpoint_interval,
             checkpoint_file=args.output  # 중간 결과를 output 파일에 저장
@@ -414,7 +416,8 @@ Examples:
         results = engine.run_cross_combination_test(
             data=data,
             buy_strategies=buy_strategies,
-            sell_strategies=sell_strategies
+            sell_strategies=sell_strategies,
+            is_timeseries_backtest=args.is_timeseries_backtest
         )
     
     # === 6. 결과 출력 및 파일 저장 ===

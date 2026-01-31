@@ -125,7 +125,8 @@ class PerformanceMetrics:
         buy_strategy_name: str = "",
         buy_params: Optional[Dict[str, Any]] = None,
         sell_strategy_name: str = "",
-        sell_params: Optional[Dict[str, Any]] = None
+        sell_params: Optional[Dict[str, Any]] = None,
+        mdd: float = 1.0
     ) -> 'PerformanceMetrics':
         """
         거래 기록에서 성과 지표 계산
@@ -168,16 +169,13 @@ class PerformanceMetrics:
         # 누적 수익률 및 MDD 계산
         cum_capital = initial_capital
         max_capital = initial_capital
-        mdd = 1.0  # 1.0 = 낙폭 없음
         
         pnl_list = [t.pnl for t in trades]
         
+        
+        # total_pnl 계산 (ticker_mdds를 사용해도 누적 수익률은 거래 기록 기반으로 계산)
         for pnl in pnl_list:
             cum_capital *= (1 + pnl)
-            if cum_capital > max_capital:
-                max_capital = cum_capital
-            current_dd = cum_capital / max_capital
-            mdd = min(mdd, current_dd)
         
         total_pnl = (cum_capital / initial_capital) - 1.0
         max_drawdown_pct = (1.0 - mdd) * 100
