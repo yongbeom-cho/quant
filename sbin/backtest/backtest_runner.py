@@ -274,8 +274,8 @@ Examples:
     parser.add_argument('--initial_capital', type=float, default=1.0,
                         help='Initial capital (default: 1.0)')
     # 다중 포지션 설정 (매수)
-    parser.add_argument('--max_positions', type=int, default=1,
-                        help='Maximum number of concurrent positions per ticker (default: 1)')
+    parser.add_argument('--max_position_cnts', type=str, default='1',
+                        help='Maximum number of concurrent positions per ticker (comma-separated, default: 1)')
     parser.add_argument('--is_timeseries_backtest', action='store_true',
                         help='Use timeseries backtest mode (default: False)')
     
@@ -389,14 +389,17 @@ Examples:
     print(f"Sell strategies: {len(sell_strategies)} combinations")
     print(f"Total combinations: {len(buy_strategies) * len(sell_strategies)}")
     
-    # === 5. 백테스트 실행 (핵심 시뮬레이션 환경 구축) ===
+    # === 5. max_position_cnts 파싱 ===
+    max_position_cnts = [int(x.strip()) for x in args.max_position_cnts.split(',')]
+    print(f"max_position_cnts: {max_position_cnts}")
+    
+    # === 6. 백테스트 실행 (핵심 시뮬레이션 환경 구축) ===
     print("\n=== [4/4] Running Backtest ===")
-    print(f"Settings: max_positions={args.max_positions}")
+    print(f"Settings: max_position_cnts={max_position_cnts}")
     engine = UnifiedBacktestEngine(
         commission_fee=args.commission_fee,
         slippage_fee=args.slippage_fee,
-        initial_capital=args.initial_capital,
-        max_positions=args.max_positions
+        initial_capital=args.initial_capital
     )
     
     # 병렬 또는 순차 실행 선택
@@ -407,6 +410,8 @@ Examples:
             data=data,
             buy_strategies=buy_strategies,
             sell_strategies=sell_strategies,
+            max_position_cnts=max_position_cnts,
+            use_reverse_signal=True,
             is_timeseries_backtest=args.is_timeseries_backtest,
             n_workers=args.workers,
             checkpoint_interval=args.checkpoint_interval,
@@ -417,6 +422,8 @@ Examples:
             data=data,
             buy_strategies=buy_strategies,
             sell_strategies=sell_strategies,
+            max_position_cnts=max_position_cnts,
+            use_reverse_signal=True,
             is_timeseries_backtest=args.is_timeseries_backtest
         )
     

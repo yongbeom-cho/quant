@@ -116,6 +116,7 @@ class PerformanceMetrics:
     buy_params: Dict[str, Any] = field(default_factory=dict)
     sell_strategy_name: str = ""
     sell_params: Dict[str, Any] = field(default_factory=dict)
+    max_position_cnt: int = 1
     
     @classmethod
     def from_trades(
@@ -126,6 +127,7 @@ class PerformanceMetrics:
         buy_params: Optional[Dict[str, Any]] = None,
         sell_strategy_name: str = "",
         sell_params: Optional[Dict[str, Any]] = None,
+        max_position_cnt: int = 1,
         mdd: float = 1.0
     ) -> 'PerformanceMetrics':
         """
@@ -155,7 +157,8 @@ class PerformanceMetrics:
                 buy_strategy_name=buy_strategy_name,
                 buy_params=buy_params or {},
                 sell_strategy_name=sell_strategy_name,
-                sell_params=sell_params or {}
+                sell_params=sell_params or {},
+                max_position_cnt=max_position_cnt
             )
         
         # 기본 통계
@@ -217,7 +220,8 @@ class PerformanceMetrics:
             buy_strategy_name=buy_strategy_name,
             buy_params=buy_params or {},
             sell_strategy_name=sell_strategy_name,
-            sell_params=sell_params or {}
+            sell_params=sell_params or {},
+            max_position_cnt=max_position_cnt
         )
     
     def to_dict(self) -> Dict[str, Any]:
@@ -240,7 +244,8 @@ class PerformanceMetrics:
             'buy_strategy_name': self.buy_strategy_name,
             'buy_params': self.buy_params,
             'sell_strategy_name': self.sell_strategy_name,
-            'sell_params': self.sell_params
+            'sell_params': self.sell_params,
+            'max_position_cnt': self.max_position_cnt
         }
     
     def summary_string(self) -> str:
@@ -249,7 +254,7 @@ class PerformanceMetrics:
             f"PnL: {self.total_pnl:.4f} | MDD: {self.mdd:.4f} | "
             f"Win: {self.win_ratio:.2%} | Trades: {self.trade_count} "
             f"(W:{self.win_count} L:{self.lose_count}) | "
-            f"Buy: {self.buy_strategy_name} | Sell: {self.sell_strategy_name}"
+            f"Buy: {self.buy_strategy_name} | Sell: {self.sell_strategy_name} | MaxPos: {self.max_position_cnt}"
         )
     
     def __repr__(self) -> str:

@@ -15,6 +15,7 @@ python -u backtest/backtest_runner.py \
     --checkpoint_interval 100 \
     --sort_by total_pnl --top_n 20 \
     --is_timeseries_backtest \
+    --max_position_cnts 3,5,10 \
     --output ${root_dir}/var/ts_backtest_results_day_1_2.csv 2>&1
 echo "=== Done ==="
 
@@ -27,6 +28,7 @@ python -u backtest/backtest_runner.py \
     --parallel --workers 8 \
     --checkpoint_interval 100 \
     --sort_by total_pnl --top_n 20 \
+    --max_position_cnts 3,5,10 \
     --output ${root_dir}/var/unit_backtest_day_1_2.csv 2>&1
 echo "=== Done ==="
 
@@ -41,6 +43,7 @@ python -u backtest/backtest_runner.py \
     --checkpoint_interval 100 \
     --sort_by total_pnl --top_n 20 \
     --is_timeseries_backtest \
+    --max_position_cnts 3,5,10 \
     --output ${root_dir}/var/ts_backtest_results_minute240_1_2.csv 2>&1
 echo "=== Done ==="
 
@@ -54,6 +57,7 @@ python -u backtest/backtest_runner.py \
     --parallel --workers 8 \
     --checkpoint_interval 100 \
     --sort_by total_pnl --top_n 20 \
+    --max_position_cnts 3,5,10 \
     --output ${root_dir}/var/unit_backtest_results_minute240_1_2.csv 2>&1
 echo "=== Done ==="
 
@@ -68,6 +72,7 @@ python -u backtest/backtest_runner.py \
     --checkpoint_interval 100 \
     --sort_by total_pnl --top_n 20 \
     --is_timeseries_backtest \
+    --max_position_cnts 5,10,20 \
     --output ${root_dir}/var/ts_backtest_results_minute60_1_2.csv 2>&1
 echo "=== Done ==="
 
@@ -80,6 +85,7 @@ python -u backtest/backtest_runner.py \
     --parallel --workers 8 \
     --checkpoint_interval 100 \
     --sort_by total_pnl --top_n 20 \
+    --max_position_cnts 5,10,20 \
     --output ${root_dir}/var/unit_backtest_results_minute60_1_2.csv 2>&1
 echo "=== Done ==="
 

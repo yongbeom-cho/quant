@@ -44,14 +44,14 @@ def _run_single_backtest_worker(
     engine = UnifiedBacktestEngine(
         commission_fee=kwargs['commission_fee'],
         slippage_fee=kwargs['slippage_fee'],
-        initial_capital=kwargs['initial_capital'],
-        max_positions=kwargs.get('max_positions', 1)
+        initial_capital=kwargs['initial_capital']
     )
     
     return engine.run_single_backtest(
         kwargs['data'],
         buy_strategy,
         sell_strategy,
+        kwargs.get('max_position_cnt', 1),
         kwargs['use_reverse_signal'],
         kwargs.get('is_timeseries_backtest', False)
     )
@@ -74,7 +74,7 @@ class UnifiedBacktestEngine:
     engine = UnifiedBacktestEngine(commission_fee=0.0005, slippage_fee=0.002)
     
     # 단일 조합 테스트
-    result = engine.run_single_backtest(data, buy_strategy, sell_strategy)
+    result = engine.run_single_backtest(data, buy_strategy, sell_strategy, max_position_cnt)
     
     # Cross-combination 테스트
     results = engine.run_cross_combination_test(data, buy_strategies, sell_strategies)
@@ -88,27 +88,24 @@ class UnifiedBacktestEngine:
         self,
         commission_fee: float = 0.0005,
         slippage_fee: float = 0.002,
-        initial_capital: float = 1.0,
-        max_positions: int = 1
+        initial_capital: float = 1.0
     ):
         """
         Args:
             commission_fee: 수수료율 (예: 0.0005 = 0.05%)
             slippage_fee: 슬리피지율 (예: 0.002 = 0.2%)
             initial_capital: 초기 자본
-            max_positions: 동시에 보유 가능한 최대 포지션 수 (기본값: 1)
         """
         self.commission_fee = commission_fee
         self.slippage_fee = slippage_fee
         self.initial_capital = initial_capital
-        self.max_positions = max_positions
-        self.entry_capital_ratio = 1.0 / max_positions
     
     def run_single_backtest(
         self,
         data: Dict[str, pd.DataFrame],
         buy_strategy: BaseBuyStrategy,
         sell_strategy: BaseSellStrategy,
+        max_position_cnt: int = 1,
         use_reverse_signal: bool = True,
         is_timeseries_backtest: bool = False
     ) -> PerformanceMetrics:
@@ -126,15 +123,19 @@ class UnifiedBacktestEngine:
         """
         all_trades: List[TradeRecord] = []
         
+        # max_position_cnt가 지정되지 않으면 기본값 1 사용
+        if max_position_cnt is None:
+            max_position_cnt = 1
+        
         if is_timeseries_backtest:
             return self._run_timeseries_backtest(
-                data, buy_strategy, sell_strategy, use_reverse_signal
+                data, buy_strategy, sell_strategy, max_position_cnt, use_reverse_signal
             )
         
         ticker_mdds: List[float] = []
         for ticker, df in data.items():
             ticker_trades, ticker_mdd = self._run_ticker_backtest(
-                ticker, df, buy_strategy, sell_strategy, use_reverse_signal
+                ticker, df, buy_strategy, sell_strategy, max_position_cnt, use_reverse_signal
             )
             all_trades.extend(ticker_trades)
             ticker_mdds.append(ticker_mdd)
@@ -149,6 +150,7 @@ class UnifiedBacktestEngine:
             buy_params=buy_strategy.config,
             sell_strategy_name=sell_strategy.name,
             sell_params=sell_strategy.config,
+            max_position_cnt=max_position_cnt,
             mdd=min_ticker_mdd
         )
 
@@ -158,13 +160,14 @@ class UnifiedBacktestEngine:
         data: Dict[str, pd.DataFrame],
         buy_strategy: BaseBuyStrategy,
         sell_strategy: BaseSellStrategy,
-        use_reverse_signal: bool
+        max_position_cnt: int,
+        use_reverse_signal: bool = True
     ) -> PerformanceMetrics:
         """
         data에 있는 모든 ticker들의 시간들을 모두 모아 가장 과거부터 최신으로 순회하며 backtest를 실행한다.
         1. 먼저 각 ticker별로 매수 signal을 모두 구하고, 
         2. 과거부터 최신으로 순회하면서 모든 ticker들의 signal을 확인한다. 
-        3. 이때, len(active_positions) < self.max_positions: 일때만 포지션에 진입할 수 있다.
+        3. 이때, len(active_positions) < max_position_cnt: 일때만 포지션에 진입할 수 있다.
         4. 같은 시점에 여러개의 ticker에서 동시에 signal이 발생 할 수 있는데, 이때는 거래대금 순으로 매수한다.
         5. mdd도 전체 자산에 대해서 계산해야한다. (각 시간마다 total_asset를 계산하고, 최고 total_asset을 기록하고 있어서 매 시간마다 mdd를 계산해야한다.)
         """
@@ -315,11 +318,12 @@ class UnifiedBacktestEngine:
             entry_candidates.sort(key=lambda x: x[3], reverse=True)
             
             # 신규 진입 처리 (거래대금 순으로)
+            entry_capital_ratio = 1.0 / max_position_cnt
             for ticker, row_idx, row, tx_amount, signal_dir in entry_candidates:
-                if len(active_positions) >= self.max_positions:
+                if len(active_positions) >= max_position_cnt:
                     break
                 
-                entry_amount = total_asset * self.entry_capital_ratio
+                entry_amount = total_asset * entry_capital_ratio
                 if cash >= entry_amount and entry_amount > 0:
                     signals = ticker_signals[ticker]
                     position = buy_strategy.create_position(
@@ -337,6 +341,7 @@ class UnifiedBacktestEngine:
             buy_params=buy_strategy.config,
             sell_strategy_name=sell_strategy.name,
             sell_params=sell_strategy.config,
+            max_position_cnt=max_position_cnt,
             mdd=mdd
         )
     
@@ -346,7 +351,8 @@ class UnifiedBacktestEngine:
         df: pd.DataFrame,
         buy_strategy: BaseBuyStrategy,
         sell_strategy: BaseSellStrategy,
-        use_reverse_signal: bool
+        max_position_cnt: int,
+        use_reverse_signal: bool = True
     ) -> Tuple[List[TradeRecord], float]:
         """
         단일 종목 백테스트 메인 루프 (다중 포지션 지원)
@@ -355,7 +361,7 @@ class UnifiedBacktestEngine:
         1. 매수 전략을 호출하여 전체 데이터에 대한 지표 및 매수 신호를 미리 계산합니다.
            (매수 신호: direction=1(Long), -1(Short), 0(None))
         2. 봉(bar)을 하나씩 순회하며 각 포지션에 대해 독립적으로 청산 조건을 확인합니다.
-        3. 최대 포지션 수(max_positions) 미만일 경우에만 새 진입을 허용합니다.
+        3. 최대 포지션 수(max_position_cnt) 미만일 경우에만 새 진입을 허용합니다.
         
         Returns:
             (trades, ticker_mdd) 튜플
@@ -423,7 +429,8 @@ class UnifiedBacktestEngine:
                         cash += position.invested_amount * (1 + trade.pnl)
                         
                         # 반대 방향 포지션으로 즉시 진입 (자금 여유가 있다면)
-                        entry_amount = total_asset * self.entry_capital_ratio
+                        entry_capital_ratio = 1.0 / max_position_cnt
+                        entry_amount = total_asset * entry_capital_ratio
                         if cash >= entry_amount:
                             new_position = buy_strategy.create_position(
                                 df, i, new_dir, signals, entry_amount, total_asset, ticker
@@ -464,11 +471,12 @@ class UnifiedBacktestEngine:
             current_dd = total_asset / max_total_asset if max_total_asset > 0 else 1.0
             mdd = min(mdd, current_dd)
             
-            # === 신규 진입 로직 (포지션 개수가 max_positions 미만일 때만) ===
-            if len(active_positions) < self.max_positions:
+            # === 신규 진입 로직 (포지션 개수가 max_position_cnt 미만일 때만) ===
+            entry_capital_ratio = 1.0 / max_position_cnt
+            if len(active_positions) < max_position_cnt:
                 # 매수 신호가 발생했고 진입 가능한 자금이 있는 경우
                 if direction[i] != 0:
-                    entry_amount = total_asset * self.entry_capital_ratio
+                    entry_amount = total_asset * entry_capital_ratio
                     if cash >= entry_amount and entry_amount > 0:
                         position = buy_strategy.create_position(
                             df, i, int(direction[i]), signals, entry_amount, total_asset, ticker
@@ -484,6 +492,7 @@ class UnifiedBacktestEngine:
         data: Dict[str, pd.DataFrame],
         buy_strategies: List[BaseBuyStrategy],
         sell_strategies: List[BaseSellStrategy],
+        max_position_cnts: List[int] = [1],
         use_reverse_signal: bool = True,
         is_timeseries_backtest: bool = False
     ) -> List[PerformanceMetrics]:
@@ -499,25 +508,27 @@ class UnifiedBacktestEngine:
             sell_strategies: 청산 전략 리스트
             use_reverse_signal: 리버스 시그널 사용 여부
             is_timeseries_backtest: 타임시리즈 백테스트 모드 사용 여부
+            max_position_cnts: 최대 포지션 수 리스트
             
         Returns:
             모든 조합의 PerformanceMetrics 리스트
         """
         results = []
-        total = len(buy_strategies) * len(sell_strategies)
+        total = len(buy_strategies) * len(sell_strategies) * len(max_position_cnts)
         count = 0
         
         for buy_strat in buy_strategies:
             for sell_strat in sell_strategies:
-                count += 1
-                result = self.run_single_backtest(
-                    data, buy_strat, sell_strat, use_reverse_signal, is_timeseries_backtest
-                )
-                results.append(result)
-                
-                # 진행 상황 출력
-                if count % 10 == 0 or count == total:
-                    print(f"Progress: {count}/{total} combinations tested")
+                for max_position_cnt in max_position_cnts:
+                    count += 1
+                    result = self.run_single_backtest(
+                        data, buy_strat, sell_strat, max_position_cnt, use_reverse_signal, is_timeseries_backtest
+                    )
+                    results.append(result)
+                    
+                    # 진행 상황 출력
+                    if count % 10 == 0 or count == total:
+                        print(f"Progress: {count}/{total} combinations tested")
         
         return results
     
@@ -526,6 +537,7 @@ class UnifiedBacktestEngine:
         data: Dict[str, pd.DataFrame],
         buy_strategies: List[BaseBuyStrategy],
         sell_strategies: List[BaseSellStrategy],
+        max_position_cnts: List[int] = [1],
         use_reverse_signal: bool = True,
         is_timeseries_backtest: bool = False,
         n_workers: int = None,
@@ -541,6 +553,7 @@ class UnifiedBacktestEngine:
             sell_strategies: 청산 전략 리스트
             use_reverse_signal: 리버스 시그널 사용 여부
             is_timeseries_backtest: 타임시리즈 백테스트 모드 사용 여부
+            max_position_cnts: 최대 포지션 수 리스트
             n_workers: 워커 수 (None이면 CPU 코어 수)
             checkpoint_interval: 중간 저장 주기 (기본 100)
             checkpoint_file: 중간 결과 저장 파일 경로 (None이면 저장 안함)
@@ -554,11 +567,12 @@ class UnifiedBacktestEngine:
         if n_workers is None:
             n_workers = min(cpu_count(), 8)  # 최대 8개 프로세스
         
-        # 모든 조합 생성
+        # 모든 조합 생성 (buy_strategy, sell_strategy, max_position_cnt)
         combinations = [
-            (buy_strat, sell_strat)
+            (buy_strat, sell_strat, max_position_cnt)
             for buy_strat in buy_strategies
             for sell_strat in sell_strategies
+            for max_position_cnt in max_position_cnts
         ]
         
         total = len(combinations)
@@ -567,14 +581,13 @@ class UnifiedBacktestEngine:
             print(f"Checkpoint file: {checkpoint_file} (saving every {checkpoint_interval} results)")
         
         # 워커 함수에서 사용할 데이터와 설정 준비 (다중 포지션 설정 포함)
-        worker_kwargs = {
+        base_worker_kwargs = {
             'data': data,
             'use_reverse_signal': use_reverse_signal,
             'is_timeseries_backtest': is_timeseries_backtest,
             'commission_fee': self.commission_fee,
             'slippage_fee': self.slippage_fee,
-            'initial_capital': self.initial_capital,
-            'max_positions': self.max_positions
+            'initial_capital': self.initial_capital
         }
         
         # 체크포인트 파일 초기화 (헤더 작성)
@@ -592,7 +605,9 @@ class UnifiedBacktestEngine:
         
         # 워커에 전달할 인자들을 생성 (제너레이터로 메모리 절약)
         def generate_worker_args():
-            for buy_strat, sell_strat in combinations:
+            for buy_strat, sell_strat, max_position_cnt in combinations:
+                worker_kwargs = base_worker_kwargs.copy()
+                worker_kwargs['max_position_cnt'] = max_position_cnt
                 yield (buy_strat.config, sell_strat.config,
                        buy_strat.name, sell_strat.name, worker_kwargs)
         
