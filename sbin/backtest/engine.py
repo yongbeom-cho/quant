@@ -706,6 +706,7 @@ class UnifiedBacktestEngine:
             print(f"\n[{i}] {r.summary_string()}")
             print(f"    Buy Params: {r.buy_params}")
             print(f"    Sell Params: {r.sell_params}")
+            print(f"    Max Position Cnt: {r.max_position_cnt}")
     
     @staticmethod
     def results_to_dataframe(results: List[PerformanceMetrics]) -> pd.DataFrame:

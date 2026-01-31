@@ -445,6 +445,10 @@ Examples:
                 print(f"\n[{i}] {row['buy_strategy_name']} + {row['sell_strategy_name']}")
                 print(f"    PnL: {row['total_pnl']:.4f} | Win: {row['win_ratio']:.2%} | "
                       f"Trades: {int(row['trade_count'])} | MDD: {row['max_drawdown_pct']:.2f}%")
+                # buy_params, sell_params, max_position_cnt 출력
+                print(f"    Buy Params: {row['buy_params']}")
+                print(f"    Sell Params: {row['sell_params']}")
+                print(f"    Max Position Cnt: {int(row['max_position_cnt'])}")
         else:
             # 순차 모드에서는 메모리에 있는 결과를 바로 정렬하여 출력
             top_results = engine.get_top_results(
