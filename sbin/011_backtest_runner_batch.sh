@@ -28,8 +28,9 @@ get_max_position_cnts() {
 }
 
 # Run backtest for each interval
-for interval in day minute240 minute60; do
-    max_position_cnts=${intervals[$interval]}
+# for interval in day minute240 minute60; do
+for interval in day; do
+    max_position_cnts=$(get_max_position_cnts ${interval})
     
     # TS (timeseries) backtest
     output_file="${root_dir}/var/ts_backtest_${interval}_1_2.csv"
@@ -49,22 +50,22 @@ for interval in day minute240 minute60; do
     echo "=== Done ==="
     echo ""
     
-    # # Unit backtest
-    # output_file="${root_dir}/var/unit_backtest_${interval}_1_2.csv"
+    # Unit backtest
+    output_file="${root_dir}/var/unit_backtest_${interval}_1_2.csv"
     
-    # echo "=== Running ${interval} Buy 1, Sell 2 Config Combinations ==="
-    # python -u backtest/backtest_runner.py \
-    #     --buy_config buy_strategy/config/buy_config.json --buy_config_idx ${buy_config_idx} \
-    #     --sell_config sell_strategy/config/sell_config.json --sell_config_idx ${sell_config_idx} \
-    #     --root_dir ${root_dir} \
-    #     --market coin --interval ${interval} \
-    #     --parallel --workers 8 \
-    #     --checkpoint_interval 100 \
-    #     --sort_by total_pnl --top_n 20 \
-    #     --max_position_cnts ${max_position_cnts} \
-    #     --output ${output_file} 2>&1
-    # echo "=== Done ==="
-    # echo ""
+    echo "=== Running ${interval} Buy 1, Sell 2 Config Combinations ==="
+    python -u backtest/backtest_runner.py \
+        --buy_config buy_strategy/config/buy_config.json --buy_config_idx ${buy_config_idx} \
+        --sell_config sell_strategy/config/sell_config.json --sell_config_idx ${sell_config_idx} \
+        --root_dir ${root_dir} \
+        --market coin --interval ${interval} \
+        --parallel --workers 8 \
+        --checkpoint_interval 100 \
+        --sort_by total_pnl --top_n 20 \
+        --max_position_cnts ${max_position_cnts} \
+        --output ${output_file} 2>&1
+    echo "=== Done ==="
+    echo ""
 done
 
 

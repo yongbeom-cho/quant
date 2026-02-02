@@ -38,8 +38,10 @@ class TradeRecord:
     
     # 손익 정보
     pnl: float                          # 실현 손익률
+    pnl_amount: float = 0.0             # 실현 손익 금액
     gross_pnl: float = 0.0              # 수수료 제외 손익률
     commission_paid: float = 0.0        # 지불한 수수료
+    
     
     # 추가 정보
     entry_conditions: Dict[str, Any] = field(default_factory=dict)  # 진입 시점 조건
@@ -64,6 +66,7 @@ class TradeRecord:
             'entry_reason': self.entry_reason,
             'exit_reason': self.exit_reason,
             'pnl': self.pnl,
+            'pnl_amount': self.pnl_amount,
             'gross_pnl': self.gross_pnl,
             'commission_paid': self.commission_paid,
             'entry_conditions': self.entry_conditions,
@@ -75,7 +78,7 @@ class TradeRecord:
         result_str = 'WIN' if self.is_win() else 'LOSS'
         return (
             f"TradeRecord({self.ticker}, {direction_str}, "
-            f"pnl={self.pnl:.2%}, {result_str}, {self.exit_reason})"
+            f"pnl={self.pnl:.2%}, pnl_amount={self.pnl_amount:.2f}, {result_str}, {self.exit_reason})"
         )
 
 
@@ -171,14 +174,13 @@ class PerformanceMetrics:
         
         # 누적 수익률 및 MDD 계산
         cum_capital = initial_capital
-        max_capital = initial_capital
         
-        pnl_list = [t.pnl for t in trades]
+        pnl_amount_list = [t.pnl_amount for t in trades]
         
         
         # total_pnl 계산 (ticker_mdds를 사용해도 누적 수익률은 거래 기록 기반으로 계산)
-        for pnl in pnl_list:
-            cum_capital *= (1 + pnl)
+        for pnl_amount in pnl_amount_list:
+            cum_capital += pnl_amount
         
         total_pnl = (cum_capital / initial_capital) - 1.0
         max_drawdown_pct = (1.0 - mdd) * 100

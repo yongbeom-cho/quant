@@ -151,6 +151,7 @@ class BaseSellStrategy(ABC):
             entry_reason=position.entry_reason,
             exit_reason=exit_reason,
             pnl=net_pnl,
+            pnl_amount=net_pnl * position.invested_amount,
             gross_pnl=gross_pnl,
             commission_paid=commission_paid,
             entry_conditions=position.entry_conditions,
