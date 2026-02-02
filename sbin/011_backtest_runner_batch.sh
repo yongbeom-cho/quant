@@ -8,6 +8,8 @@ buy_strategy_name="pb_rebound"
 buy_config_idx=1
 xgb_buy_config_idx=8  # XGB 모델을 사용하는 buy config index
 sell_config_idx=2
+backtest_result_dir="${root_dir}/var/backtest_result"
+mkdir -p ${backtest_result_dir}
 
 # Configuration: interval별 max_position_cnts 설정 함수
 get_max_position_cnts() {
@@ -31,9 +33,9 @@ get_max_position_cnts() {
 # for interval in day minute240 minute60; do
 for interval in day; do
     max_position_cnts=$(get_max_position_cnts ${interval})
-    
+
     # TS (timeseries) backtest
-    output_file="${root_dir}/var/ts_backtest_${interval}_1_2.csv"
+    output_file="${backtest_result_dir}/ts_backtest_${interval}_1_2.csv"
     
     echo "=== Running TS ${interval} Buy 1, Sell 2 Config Combinations ==="
     python -u backtest/backtest_runner.py \
@@ -51,7 +53,7 @@ for interval in day; do
     echo ""
     
     # Unit backtest
-    output_file="${root_dir}/var/unit_backtest_${interval}_1_2.csv"
+    output_file="${backtest_result_dir}/unit_backtest_${interval}_1_2.csv"
     
     echo "=== Running ${interval} Buy 1, Sell 2 Config Combinations ==="
     python -u backtest/backtest_runner.py \
@@ -76,7 +78,7 @@ for interval in day; do
     max_position_cnts=$(get_max_position_cnts ${interval})
     
     # 1. backtest 결과 파일 경로
-    backtest_csv="${root_dir}/var/ts_backtest_${interval}_1_2.csv"
+    backtest_csv="${backtest_result_dir}/ts_backtest_${interval}_1_2.csv"
     
     # 2. XGB 모델 학습
     model_output_dir="var/${buy_strategy_name}_xgb_model"
@@ -96,7 +98,7 @@ for interval in day; do
     
     # 3. 학습된 모델을 사용하여 TS 백테스트 실행
     # buy_config index 20 (pb_rebound_xgb_model)을 사용하여 학습된 모델로 백테스트
-    ts_backtest_output="${root_dir}/var/ts_backtest_${interval}_xgb_${buy_strategy_name}.csv"
+    ts_backtest_output="${backtest_result_dir}/ts_backtest_${interval}_xgb_${buy_strategy_name}.csv"
     
     echo "=== Running TS ${interval} XGB Backtest ==="
     python -u backtest/backtest_runner.py \
