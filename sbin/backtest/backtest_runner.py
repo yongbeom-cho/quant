@@ -86,6 +86,7 @@ import os
 import sys
 import json
 import argparse
+import glob
 from typing import List, Dict, Any
 
 # 모듈 경로 설정
@@ -111,7 +112,68 @@ def load_config(config_path: str) -> List[Dict[str, Any]]:
     return config
 
 
-def create_buy_strategies_from_separate_config(config_path: str, config_idx: int = 0) -> tuple:
+def parse_xgb_model_name(model_name: str, market: str, interval: str) -> Dict[str, Any]:
+    """
+    XGBoost 모델 이름을 파싱하여 base_strategy_name과 base_strategy_param 추출
+    
+    모델 이름 형식:
+    xgb-{market}-{interval}-{strategy_name}-{str_buy_strategy_params}-{label_col}-{min_precision}-{best_threshold}-{str_feats}
+    
+    str_buy_strategy_params 형식: key=value^key=value^...
+    
+    예시:
+    xgb-coin-day-pb_rebound-pb_rebound_line=0.7^pb_sma_period=20^pb_sma_up=0.6-label0-0.55-0.5-f0f1f2
+    
+    Returns:
+        {
+            'base_strategy_name': str,
+            'base_strategy_param': dict
+        }
+    """
+    prefix = f"xgb-{market}-{interval}-"
+    if not model_name.startswith(prefix):
+        raise ValueError(f"Model name '{model_name}' does not match expected format: {prefix}...")
+    
+    # prefix 제거
+    remaining = model_name[len(prefix):]
+    parts = remaining.split('-')
+    
+    if len(parts) < 1:
+        raise ValueError(f"Model name '{model_name}' has insufficient parts after parsing")
+    
+    # 첫 번째 부분은 strategy_name
+    base_strategy_name = parts[0]
+    
+    # 두 번째 부분부터 label_col을 찾기 (label로 시작하는 부분)
+    label_idx = parts[2]
+    
+    # str_buy_strategy_params 추출 (strategy_name과 label_col 사이)
+    base_strategy_param = {}
+        
+    # parts[1] 파싱 (key=value^key=value^... 형식)
+    # ^로 split하여 각 key=value 쌍 추출
+    
+    param_pairs = parts[1].split('^')
+    for pair in param_pairs:
+        if '=' in pair:
+            k, v = pair.split('=', 1)
+            # 값이 숫자면 숫자로 변환
+            try:
+                if '.' in v:
+                    v = float(v)
+                else:
+                    v = int(v)
+            except ValueError:
+                pass  # 문자열로 유지
+            base_strategy_param[k] = v
+    
+    return {
+        'base_strategy_name': base_strategy_name,
+        'base_strategy_param': base_strategy_param
+    }
+
+
+def create_buy_strategies_from_separate_config(config_path: str, config_idx: int = 0, root_dir: str = None, market: str = 'coin', interval: str = 'day') -> tuple:
     """
     buy_strategy/config 폴더의 설정 파일에서 전략 인스턴스 생성
     
@@ -133,6 +195,58 @@ def create_buy_strategies_from_separate_config(config_path: str, config_idx: int
         raise ValueError("buy config must contain 'strategy_name'")
     
     buy_config = config.get('buy_signal_config', config)
+    
+    # model_name_list가 있으면 XGBBuyStrategy 사용
+    if 'model_dir' in buy_config:
+        # root_dir 기본값 설정
+        if root_dir is None:
+            root_dir = os.getcwd()
+        model_dir = os.path.join(root_dir, buy_config['model_dir'])
+        
+        # model_dir에 있는 xgb-{market}-{interval}로 시작하는 모든 파일 찾기
+        pattern = os.path.join(model_dir, f'xgb-{market}-{interval}*')
+        model_files = glob.glob(pattern)
+        
+        # 파일명에서 확장자를 제거한 모델 이름 리스트 생성
+        model_name_list = []
+        for file_path in model_files:
+            model_name = os.path.basename(file_path)
+            model_name_list.append(model_name)
+        
+        # 정렬하여 일관성 유지
+        model_name_list.sort()
+
+        if not model_name_list:
+            raise ValueError(f"No model files found matching pattern: xgb-{market}-{interval}* in {model_dir}")
+        
+        strategies = []
+        for model_name in model_name_list:
+            # 모델 이름 파싱
+            try:
+                parsed = parse_xgb_model_name(model_name, market, interval)
+            except ValueError as e:
+                print(f"Warning: Failed to parse model name '{model_name}': {e}")
+                continue
+            
+            # xgb_params 생성
+            xgb_params = {
+                'strategy_name': 'xgb_buy',
+                'model_name': model_name,
+                'model_dir': model_dir,
+                'base_strategy_name': parsed['base_strategy_name'],
+                'base_strategy_param': parsed['base_strategy_param'],
+                'interval': interval
+            }
+
+            # 최대 투자 비율 설정 전달 (자산 관리용)
+            if 'max_investment_ratio' in buy_config:
+                xgb_params['max_investment_ratio'] = buy_config['max_investment_ratio']
+            strategy = get_buy_strategy('xgb_buy', xgb_params)
+            strategies.append(strategy)
+        
+        return strategies, 'xgb_buy'
+    
+    # 일반 전략 처리
     # Registry에서 파라미터 리스트를 기반으로 모든 가능한 조합(Cartesian Product)을 생성
     combinations = get_all_buy_param_combinations(strategy_name, buy_config)
     
@@ -335,7 +449,7 @@ Examples:
         # Buy 전략 생성
         buy_strategies = []
         for idx in buy_indices:
-            strats, name = create_buy_strategies_from_separate_config(args.buy_config, idx)
+            strats, name = create_buy_strategies_from_separate_config(args.buy_config, idx, args.root_dir, args.market, args.interval)
             buy_strategies.extend(strats)
             print(f"  Buy[{idx}]: {name} ({len(strats)} combinations)")
         

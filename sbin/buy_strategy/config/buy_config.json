@@ -63,24 +63,17 @@
         "buy_signal_config": {
             "pb_sma_period_list": [
                 20,
-                40,
                 60,
                 100,
                 200
             ],
             "pb_sma_up_list": [
                 0.5,
-                0.55,
                 0.6,
-                0.65,
                 0.7,
-                0.75,
                 0.8
             ],
             "pb_rebound_line_list": [
-                0.2,
-                0.3,
-                0.4,
                 0.5,
                 0.6,
                 0.7,
@@ -146,7 +139,7 @@
         }
     },
     {
-        "index": 11,
+        "index": 3,
         "strategy_name": "volatility_breakout_prev_candle",
         "description": "직전 봉 레인지 기반 변동성 돌파 전략",
         "buy_signal_config": {
@@ -161,7 +154,7 @@
         }
     },
     {
-        "index": 12,
+        "index": 4,
         "strategy_name": "adaptive_vbt",
         "description": "적응형 변동성 돌파 전략 (동적 k 값 조정)",
         "buy_signal_config": {
@@ -188,7 +181,7 @@
         }
     },
     {
-        "index": 13,
+        "index": 5,
         "strategy_name": "volume_weighted_vbt",
         "description": "거래량 가중 변동성 돌파 전략",
         "buy_signal_config": {
@@ -219,7 +212,7 @@
         }
     },
     {
-        "index": 14,
+        "index": 6,
         "strategy_name": "mean_reversion_momentum",
         "description": "평균 회귀 + 모멘텀 확인 전략",
         "buy_signal_config": {
@@ -248,7 +241,7 @@
         }
     },
     {
-        "index": 15,
+        "index": 7,
         "strategy_name": "breakout_confirmation",
         "description": "확인된 돌파 전략",
         "buy_signal_config": {
@@ -265,6 +258,14 @@
                 0.01
             ],
             "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 8,
+        "strategy_name": "pb_rebound_xgb_model",
+        "description": "xgb 모델 사용 전략",
+        "buy_signal_config": {
+            "model_dir": "var/pb_rebound_xgb_model"
         }
     }
 ]

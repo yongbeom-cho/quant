@@ -21,6 +21,7 @@ def _get_strategy_registry() -> Dict[str, Type[BaseBuyStrategy]]:
     from .vbt_strategy import VBTBuyStrategy
     from .vbt_enhanced_strategy import VBTEnhancedBuyStrategy
     from .pb_rebound_strategy import PBReboundBuyStrategy
+    from .xgb_buy_strategy import XGBBuyStrategy
     
     # VBT Prev Candle 전략
     from .vbt_prev_candle_strategy import VBTPrevCandleStrategy
@@ -43,6 +44,9 @@ def _get_strategy_registry() -> Dict[str, Type[BaseBuyStrategy]]:
         
         # VBT Prev Candle 전략
         'volatility_breakout_prev_candle': VBTPrevCandleStrategy,
+        
+        # XGBoost 모델 기반 전략
+        'xgb_buy': XGBBuyStrategy,
         
         # # New Strategies
         # 'adaptive_vbt': AdaptiveVBTStrategy,
