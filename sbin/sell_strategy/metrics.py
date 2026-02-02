@@ -176,6 +176,7 @@ class PerformanceMetrics:
         cum_capital = initial_capital
         
         pnl_amount_list = [t.pnl_amount for t in trades]
+        pnl_list = [t.pnl for t in trades]
         
         
         # total_pnl 계산 (ticker_mdds를 사용해도 누적 수익률은 거래 기록 기반으로 계산)
