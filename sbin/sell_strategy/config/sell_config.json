@@ -99,5 +99,197 @@
                 4
             ]
         }
+    },
+    {
+        "index": 4,
+        "strategy_name": "adx_exit",
+        "description": "ADX 기반 청산 전략 (추세 약화/DI 역전)",
+        "sell_signal_config": {
+            "adx_period_list": [
+                10,
+                14,
+                20
+            ],
+            "adx_exit_threshold_list": [
+                15,
+                18,
+                20,
+                25
+            ],
+            "stop_loss_ratio_list": [
+                0.015,
+                0.02,
+                0.025,
+                0.03
+            ],
+            "take_profit_ratio_list": [
+                0.03,
+                0.05,
+                0.07,
+                0.1
+            ],
+            "exit_on_di_reversal_list": [
+                true,
+                false
+            ]
+        }
+    },
+    {
+        "index": 5,
+        "strategy_name": "bb_squeeze_exit",
+        "description": "볼린저밴드 압축 청산 전략 (반대 밴드 목표)",
+        "sell_signal_config": {
+            "bb_period_list": [
+                15,
+                20,
+                25
+            ],
+            "bb_std_list": [
+                1.5,
+                2.0,
+                2.5
+            ],
+            "stop_loss_ratio_list": [
+                0.015,
+                0.02,
+                0.03
+            ],
+            "use_trailing_stop_list": [
+                true,
+                false
+            ],
+            "atr_period_list": [
+                10,
+                14,
+                20
+            ],
+            "trailing_atr_mult_list": [
+                1.5,
+                2.0,
+                2.5,
+                3.0
+            ],
+            "timeout_bars_list": [
+                5,
+                10,
+                15,
+                20
+            ]
+        }
+    },
+    {
+        "index": 6,
+        "strategy_name": "macd_exit",
+        "description": "MACD 크로스 청산 전략",
+        "sell_signal_config": {
+            "fast_period_list": [
+                8,
+                12,
+                16
+            ],
+            "slow_period_list": [
+                21,
+                26,
+                34
+            ],
+            "signal_period_list": [
+                7,
+                9,
+                12
+            ],
+            "stop_loss_ratio_list": [
+                0.015,
+                0.02,
+                0.025,
+                0.03
+            ],
+            "take_profit_ratio_list": [
+                0.03,
+                0.05,
+                0.07,
+                0.1
+            ],
+            "timeout_bars_list": [
+                10,
+                15,
+                20,
+                30
+            ]
+        }
+    },
+    {
+        "index": 7,
+        "strategy_name": "chandelier_exit",
+        "description": "Chandelier Exit 전략 (ATR 기반 동적 손절)",
+        "sell_signal_config": {
+            "atr_period_list": [
+                10,
+                14,
+                20
+            ],
+            "exit_mult_list": [
+                2.0,
+                2.5,
+                3.0,
+                3.5,
+                4.0
+            ],
+            "lookback_period_list": [
+                14,
+                22,
+                30
+            ],
+            "use_ema_exit_list": [
+                true,
+                false
+            ],
+            "ema_period_list": [
+                10,
+                20,
+                50
+            ],
+            "stop_loss_ratio_list": [
+                0.03,
+                0.05,
+                0.07
+            ]
+        }
+    },
+    {
+        "index": 8,
+        "strategy_name": "vwap_exit",
+        "description": "VWAP 목표가 청산 전략",
+        "sell_signal_config": {
+            "vwap_period_list": [
+                10,
+                20,
+                50
+            ],
+            "target_at_vwap_list": [
+                true,
+                false
+            ],
+            "stop_std_mult_list": [
+                2.5,
+                3.0,
+                3.5
+            ],
+            "target_std_mult_list": [
+                0.5,
+                1.0,
+                1.5
+            ],
+            "stop_loss_ratio_list": [
+                0.02,
+                0.03,
+                0.04
+            ],
+            "timeout_bars_list": [
+                3,
+                5,
+                7,
+                10
+            ]
+        }
     }
 ]

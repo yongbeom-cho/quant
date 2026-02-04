@@ -267,5 +267,258 @@
         "buy_signal_config": {
             "model_dir": "var/pb_rebound_xgb_model"
         }
+    },
+    {
+        "index": 9,
+        "strategy_name": "adx_momentum",
+        "description": "ADX 모멘텀 필터 전략 (DI 크로스오버 + 추세 강도)",
+        "buy_signal_config": {
+            "adx_period_list": [
+                10,
+                14,
+                20
+            ],
+            "adx_threshold_list": [
+                15,
+                20,
+                25,
+                30
+            ],
+            "ema_period_list": [
+                10,
+                20,
+                50
+            ],
+            "use_ema_filter_list": [
+                true,
+                false
+            ],
+            "require_crossover_list": [
+                true,
+                false
+            ],
+            "volume_window_list": [
+                10,
+                20
+            ],
+            "volume_mult_list": [
+                0.8,
+                1.0,
+                1.2
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 10,
+        "strategy_name": "bb_squeeze",
+        "description": "볼린저밴드 압축 돌파 전략 (Squeeze 후 돌파)",
+        "buy_signal_config": {
+            "bb_period_list": [
+                15,
+                20,
+                25
+            ],
+            "bb_std_list": [
+                1.5,
+                2.0,
+                2.5
+            ],
+            "squeeze_percentile_list": [
+                10,
+                15,
+                20,
+                25,
+                30
+            ],
+            "squeeze_lookback_list": [
+                30,
+                50,
+                100
+            ],
+            "volume_window_list": [
+                10,
+                20
+            ],
+            "volume_mult_list": [
+                1.0,
+                1.5,
+                2.0
+            ],
+            "use_adx_filter_list": [
+                false,
+                true
+            ],
+            "adx_period_list": [
+                14
+            ],
+            "adx_threshold_list": [
+                15,
+                20,
+                25
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 11,
+        "strategy_name": "macd_divergence",
+        "description": "MACD 다이버전스 전략 (가격-지표 괴리 감지)",
+        "buy_signal_config": {
+            "fast_period_list": [
+                8,
+                12,
+                16
+            ],
+            "slow_period_list": [
+                21,
+                26,
+                34
+            ],
+            "signal_period_list": [
+                7,
+                9,
+                12
+            ],
+            "divergence_lookback_list": [
+                5,
+                10,
+                15,
+                20
+            ],
+            "rsi_period_list": [
+                7,
+                14,
+                21
+            ],
+            "rsi_threshold_long_list": [
+                30,
+                35,
+                40
+            ],
+            "rsi_threshold_short_list": [
+                60,
+                65,
+                70
+            ],
+            "use_rsi_filter_list": [
+                true,
+                false
+            ],
+            "require_macd_cross_list": [
+                true,
+                false
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 12,
+        "strategy_name": "atr_channel",
+        "description": "ATR 채널 돌파 전략 (Keltner Channel 변형)",
+        "buy_signal_config": {
+            "ema_period_list": [
+                10,
+                20,
+                50
+            ],
+            "atr_period_list": [
+                10,
+                14,
+                20
+            ],
+            "channel_mult_list": [
+                1.5,
+                2.0,
+                2.5,
+                3.0
+            ],
+            "use_adx_filter_list": [
+                true,
+                false
+            ],
+            "adx_threshold_list": [
+                15,
+                20,
+                25
+            ],
+            "require_atr_expansion_list": [
+                true,
+                false
+            ],
+            "atr_ma_period_list": [
+                5,
+                10,
+                20
+            ],
+            "volume_window_list": [
+                10,
+                20
+            ],
+            "volume_mult_list": [
+                0.8,
+                1.0,
+                1.5
+            ],
+            "max_investment_ratio": 1.0
+        }
+    },
+    {
+        "index": 13,
+        "strategy_name": "vwap_reversion",
+        "description": "VWAP 회귀 전략 (평균 회귀)",
+        "buy_signal_config": {
+            "vwap_period_list": [
+                10,
+                20,
+                50
+            ],
+            "vwap_std_mult_list": [
+                1.5,
+                2.0,
+                2.5,
+                3.0
+            ],
+            "rsi_period_list": [
+                7,
+                14,
+                21
+            ],
+            "rsi_oversold_list": [
+                20,
+                25,
+                30,
+                35
+            ],
+            "rsi_overbought_list": [
+                65,
+                70,
+                75,
+                80
+            ],
+            "use_rsi_filter_list": [
+                true,
+                false
+            ],
+            "require_reversal_candle_list": [
+                true,
+                false
+            ],
+            "stop_std_mult_list": [
+                2.5,
+                3.0,
+                3.5
+            ],
+            "volume_window_list": [
+                10,
+                20
+            ],
+            "volume_mult_list": [
+                0.8,
+                1.0,
+                1.5
+            ],
+            "max_investment_ratio": 1.0
+        }
     }
 ]
