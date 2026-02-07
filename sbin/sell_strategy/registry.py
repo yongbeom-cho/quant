@@ -21,11 +21,12 @@ def _get_strategy_registry() -> Dict[str, Type[BaseSellStrategy]]:
     from .timeseries_sell_strategy import TimeseriesSellStrategy
     from .simple_ratio_sell_strategy import SimpleRatioSellStrategy
     
-    # # New strategies
-    # from .atr_trailing_stop_strategy import ATRTrailingStopStrategy
-    # from .profit_target_ladder_strategy import ProfitTargetLadderStrategy
-    # from .time_based_exit_strategy import TimeBasedExitStrategy
-    # from .volatility_compression_exit_strategy import VolatilityCompressionExitStrategy
+    # 5개 신규 청산 전략 임포트
+    from .adx_exit_strategy import ADXExitStrategy
+    from .bb_squeeze_exit_strategy import BBSqueezeExitStrategy
+    from .macd_exit_strategy import MACDExitStrategy
+    from .chandelier_exit_strategy import ChandelierExitStrategy
+    from .vwap_exit_strategy import VWAPExitStrategy
     
     return {
         # VBT 청산 전략
@@ -47,11 +48,21 @@ def _get_strategy_registry() -> Dict[str, Type[BaseSellStrategy]]:
         'simple_ratio_sell_quick': SimpleRatioSellStrategy,
         'ratio_sell': SimpleRatioSellStrategy,
         
-        # # New Strategies
-        # 'atr_trailing_stop': ATRTrailingStopStrategy,
-        # 'profit_target_ladder': ProfitTargetLadderStrategy,
-        # 'time_based_exit': TimeBasedExitStrategy,
-        # 'volatility_compression_exit': VolatilityCompressionExitStrategy,
+        # === 신규 청산 전략 (2026-02) ===
+        # ADX 기반 청산 전략
+        'adx_exit': ADXExitStrategy,
+        
+        # BB Squeeze 청산 전략
+        'bb_squeeze_exit': BBSqueezeExitStrategy,
+        
+        # MACD 크로스 청산 전략
+        'macd_exit': MACDExitStrategy,
+        
+        # Chandelier Exit 전략
+        'chandelier_exit': ChandelierExitStrategy,
+        
+        # VWAP 목표가 청산 전략
+        'vwap_exit': VWAPExitStrategy,
     }
 
 
