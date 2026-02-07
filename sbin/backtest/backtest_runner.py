@@ -153,13 +153,46 @@ def export_trades_with_index(
     next_id = len(trades_index) + 1
     export_count = 0
     
+    # 기존 인덱스를 전략 키로 매핑 (덮어쓰기 지원)
+    def get_strategy_key(meta, ticker=None, intv=None):
+        """전략을 고유하게 식별하는 키 생성 (ticker + interval + 전략 + 파라미터)"""
+        tk = ticker or meta.get("ticker", "Unknown")
+        iv = intv or meta.get("interval", "")
+        return (
+            tk,
+            iv,
+            meta.get("buy_strategy") or meta.get("buy_strategy_name", ""),
+            str(meta.get("buy_params", {})),
+            meta.get("sell_strategy") or meta.get("sell_strategy_name", ""),
+            str(meta.get("sell_params", {}))
+        )
+    
+    # 기존 전략 키 → trade_id 매핑
+    existing_keys = {get_strategy_key(meta): trade_id for trade_id, meta in trades_index.items()}
+    
     for result in results:
         if not result.trade_history:
             continue
         
-        # 고유 ID 생성
-        trade_id = f"trade_{next_id:05d}"
-        next_id += 1
+        # 티커 정보 추출
+        ticker = result.trade_history[0].ticker if result.trade_history else "Unknown"
+        
+        # 현재 결과의 전략 키 (interval 포함)
+        current_key = (
+            ticker,
+            interval,
+            result.buy_strategy_name,
+            str(result.buy_params),
+            result.sell_strategy_name,
+            str(result.sell_params)
+        )
+        
+        # 동일 전략이 있으면 기존 ID 사용, 없으면 새 ID 생성
+        if current_key in existing_keys:
+            trade_id = existing_keys[current_key]
+        else:
+            trade_id = f"trade_{next_id:05d}"
+            next_id += 1
         
         # 거래 내역 데이터 (trades만 저장, 메타데이터는 인덱스에)
         trade_data = {
@@ -187,7 +220,10 @@ def export_trades_with_index(
             json.dump(trade_data, f, ensure_ascii=False, indent=2)
         
         # 인덱스에 메타데이터 추가
+        # 티커 정보 추출 (첫 번째 거래에서)
+        ticker = result.trade_history[0].ticker if result.trade_history else "Unknown"
         trades_index[trade_id] = {
+            "ticker": ticker,
             "interval": interval,
             "buy_strategy": result.buy_strategy_name,
             "buy_params": result.buy_params,

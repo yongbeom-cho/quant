@@ -2,8 +2,9 @@ import sqlite3
 import pandas as pd
 import numpy as np
 import os
-from typing import List
-from fastapi import FastAPI, Query
+import json
+from typing import List, Optional
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
@@ -14,8 +15,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 사용자 설정 경로
-DB_DIR = "/Users/yongbeom/cyb/project/2025/quant/var/data"
+# 환경변수에서 경로 읽기 (기본값: 스크립트 기준 상대 경로)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
+DB_DIR = os.environ.get("QUANT_DB_DIR", os.path.join(PROJECT_ROOT, "var/data"))
+TRADES_DIR = os.environ.get("QUANT_TRADES_DIR", os.path.join(PROJECT_ROOT, "var/trades"))
 
 def clean_val(v):
     if pd.isna(v) or np.isinf(v): return None
@@ -215,6 +219,127 @@ def get_ohlcv(
             "donchians": {k: {"up": clean_val(v["up"].iloc[i]), "lo": clean_val(v["lo"].iloc[i])} for k, v in donchians.items() if not pd.isna(v["up"].iloc[i])}
         })
     return result
+
+
+@app.get("/api/trades")
+def get_trades_index():
+    """
+    거래 내역 인덱스 목록 조회
+    trades_index.json에서 모든 거래 기록의 메타데이터를 반환합니다.
+    """
+    index_path = os.path.join(TRADES_DIR, "trades_index.json")
+    
+    if not os.path.exists(index_path):
+        return {"trades": [], "message": "No trade data found"}
+    
+    try:
+        with open(index_path, 'r', encoding='utf-8') as f:
+            trades_index = json.load(f)
+        
+        # 인덱스를 리스트 형태로 변환 (프론트엔드 사용 편의)
+        trades_list = [
+            {"id": trade_id, **metadata}
+            for trade_id, metadata in trades_index.items()
+        ]
+        
+        # total_pnl 기준 내림차순 정렬
+        trades_list.sort(key=lambda x: x.get("total_pnl", 0), reverse=True)
+        
+        return {"trades": trades_list, "count": len(trades_list)}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading trades index: {str(e)}")
+
+
+@app.get("/api/trades/{trade_id}")
+def get_trade_detail(trade_id: str):
+    """
+    개별 거래 내역 조회
+    차트에 마커를 표시하기 위한 상세 거래 데이터를 반환합니다.
+    """
+    # 인덱스에서 메타데이터 조회
+    index_path = os.path.join(TRADES_DIR, "trades_index.json")
+    trade_path = os.path.join(TRADES_DIR, f"{trade_id}.json")
+    
+    if not os.path.exists(trade_path):
+        raise HTTPException(status_code=404, detail=f"Trade {trade_id} not found")
+    
+    try:
+        # 메타데이터 로드
+        metadata = {}
+        if os.path.exists(index_path):
+            with open(index_path, 'r', encoding='utf-8') as f:
+                trades_index = json.load(f)
+                metadata = trades_index.get(trade_id, {})
+        
+        # 거래 내역 로드
+        with open(trade_path, 'r', encoding='utf-8') as f:
+            trade_data = json.load(f)
+        
+        # 차트 마커용 데이터 변환 (timestamp 추가)
+        markers = []
+        for trade in trade_data.get("trades", []):
+            # 진입 마커
+            entry_date = trade.get("entry_date", "")
+            if entry_date:
+                # YYYYMMDD 형식을 timestamp로 변환
+                try:
+                    entry_ts = int(pd.to_datetime(entry_date).timestamp())
+                    markers.append({
+                        "time": entry_ts,
+                        "position": "belowBar" if trade.get("direction", 1) == 1 else "aboveBar",
+                        "color": "#26a69a" if trade.get("direction", 1) == 1 else "#ef5350",
+                        "shape": "arrowUp" if trade.get("direction", 1) == 1 else "arrowDown",
+                        "text": f"Entry: {trade.get('entry_reason', '')}",
+                        "price": trade.get("entry_price"),
+                        "details": {
+                            "type": "entry",
+                            "price": trade.get("entry_price"),
+                            "reason": trade.get("entry_reason"),
+                            "date": trade.get("entry_date")
+                        }
+                    })
+                except:
+                    pass
+            
+            # 청산 마커
+            exit_date = trade.get("exit_date", "")
+            if exit_date:
+                try:
+                    exit_ts = int(pd.to_datetime(exit_date).timestamp())
+                    pnl = trade.get("pnl", 0)
+                    markers.append({
+                        "time": exit_ts,
+                        "position": "aboveBar" if trade.get("direction", 1) == 1 else "belowBar",
+                        "color": "#26a69a" if pnl > 0 else "#ef5350",
+                        "shape": "circle",
+                        "text": f"Exit: {trade.get('exit_reason', '')} ({pnl:.2%})",
+                        "price": trade.get("exit_price"),
+                        "details": {
+                            "type": "exit",
+                            "price": trade.get("exit_price"),
+                            "reason": trade.get("exit_reason"),
+                            "pnl": pnl,
+                            "pnlAmount": trade.get("pnl_amount"),
+                            "holdingBars": trade.get("holding_bars"),
+                            "date": trade.get("exit_date")
+                        }
+                    })
+                except:
+                    pass
+        
+        return {
+            "id": trade_id,
+            "metadata": metadata,
+            "trades": trade_data.get("trades", []),
+            "markers": markers
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading trade data: {str(e)}")
+
 
 if __name__ == "__main__":
     import uvicorn
