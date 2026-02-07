@@ -31,12 +31,19 @@
 먼저 백테스트를 실행하여 거래 내역과 차트 데이터(OHLCV + 지표)를 JSON 파일로 추출해야 합니다.
 반드시 `--export_trades` 옵션을 사용해야 시각화에 필요한 데이터가 생성됩니다.
 
-```bash
 # 프로젝트 루트 디렉토리에서 실행 (예: ~/Projects/quant)
-
+``` bash
 python sbin/backtest/backtest_runner.py \
+    --buy_config sbin/buy_strategy/config/buy_config_test.json \
+    --buy_config_idx 0 \
+    --sell_config sbin/sell_strategy/config/sell_config_test.json \
+    --sell_config_idx 0 \
     --ticker KRW-BTC \
-    --interval minute15 \
+    --interval day \
+    --market coin \
+    --parallel \
+    --workers 8 \
+    --output var/results_test.csv \
     --export_trades var/trades/
 ```
 
