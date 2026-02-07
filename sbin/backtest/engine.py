@@ -542,7 +542,9 @@ class UnifiedBacktestEngine:
         is_timeseries_backtest: bool = False,
         n_workers: int = None,
         checkpoint_interval: int = 100,
-        checkpoint_file: str = None
+        checkpoint_file: str = None,
+        export_trades_dir: str = None,
+        interval: str = None
     ) -> List[PerformanceMetrics]:
         """
         모든 Buy/Sell 전략 조합 테스트 (멀티프로세스)
@@ -557,6 +559,8 @@ class UnifiedBacktestEngine:
             n_workers: 워커 수 (None이면 CPU 코어 수)
             checkpoint_interval: 중간 저장 주기 (기본 100)
             checkpoint_file: 중간 결과 저장 파일 경로 (None이면 저장 안함)
+            export_trades_dir: 거래 내역 저장 디렉토리 (None이면 저장 안함)
+            interval: 봉 간격 (export_trades_dir 사용 시 필수)
             
         Returns:
             모든 조합의 PerformanceMetrics 리스트
@@ -594,9 +598,13 @@ class UnifiedBacktestEngine:
         header_written = False
         if checkpoint_file:
             # 파일이 있으면 삭제하고 새로 시작
-            import os
             if os.path.exists(checkpoint_file):
                 os.remove(checkpoint_file)
+        
+        # 거래 내역 저장 준비
+        if export_trades_dir:
+            os.makedirs(export_trades_dir, exist_ok=True)
+            print(f"Trade history will be saved to: {export_trades_dir}")
         
         # 멀티프로세스 실행
         results = []
@@ -634,6 +642,74 @@ class UnifiedBacktestEngine:
                         else:
                             df.to_csv(checkpoint_file, index=False, mode='a', header=False)
                         
+                        # 거래 내역 저장 (개별 파일 + 인덱스 파일)
+                        if export_trades_dir:
+                            import json
+                            from datetime import datetime as dt
+                            
+                            # 인덱스 파일 경로
+                            index_filepath = os.path.join(export_trades_dir, 'trades_index.json')
+                            
+                            # 기존 인덱스 로드 또는 새로 생성
+                            if os.path.exists(index_filepath):
+                                with open(index_filepath, 'r', encoding='utf-8') as f:
+                                    trades_index = json.load(f)
+                            else:
+                                trades_index = {}
+                            
+                            # 현재 인덱스 번호 (기존 파일 수 기반)
+                            next_id = len(trades_index) + 1
+                            
+                            for result in pending_results:
+                                if result.trade_history:
+                                    # 고유 ID 생성
+                                    trade_id = f"trade_{next_id:05d}"
+                                    next_id += 1
+                                    
+                                    # 거래 내역 데이터
+                                    trade_data = {
+                                        "trades": [
+                                            {
+                                                "ticker": t.ticker,
+                                                "direction": t.direction,
+                                                "entry_date": t.entry_date,
+                                                "entry_price": t.entry_price,
+                                                "entry_reason": t.entry_reason,
+                                                "exit_date": t.exit_date,
+                                                "exit_price": t.exit_price,
+                                                "exit_reason": t.exit_reason,
+                                                "pnl": t.pnl,
+                                                "pnl_amount": t.pnl_amount,
+                                                "holding_bars": t.holding_bars
+                                            }
+                                            for t in result.trade_history
+                                        ]
+                                    }
+                                    
+                                    # 개별 파일 저장
+                                    trade_filepath = os.path.join(export_trades_dir, f"{trade_id}.json")
+                                    with open(trade_filepath, 'w', encoding='utf-8') as f:
+                                        json.dump(trade_data, f, ensure_ascii=False, indent=2)
+                                    
+                                    # 인덱스에 메타데이터 추가
+                                    trades_index[trade_id] = {
+                                        "interval": interval,
+                                        "buy_strategy": result.buy_strategy_name,
+                                        "buy_params": result.buy_params,
+                                        "sell_strategy": result.sell_strategy_name,
+                                        "sell_params": result.sell_params,
+                                        "max_position_cnt": result.max_position_cnt,
+                                        "total_pnl": result.total_pnl,
+                                        "win_ratio": result.win_ratio,
+                                        "trade_count": result.trade_count,
+                                        "mdd": result.mdd,
+                                        "exported_at": dt.now().isoformat()
+                                    }
+                            
+                            # 인덱스 파일 저장
+                            with open(index_filepath, 'w', encoding='utf-8') as f:
+                                json.dump(trades_index, f, ensure_ascii=False, indent=2)
+                        
                         saved_count += len(pending_results)
                         pending_results = []  # 저장 완료 후 비우기 (메모리 해제)
                 
@@ -644,6 +720,8 @@ class UnifiedBacktestEngine:
         # checkpoint 모드에서는 파일에 저장된 개수 정보만 반환
         if checkpoint_file:
             print(f"Total {saved_count} results saved to: {checkpoint_file}")
+            if export_trades_dir:
+                print(f"Trade history saved to: {export_trades_dir}")
             return [None] * saved_count  # 개수 정보만 전달
         
         return results

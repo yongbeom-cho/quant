@@ -87,6 +87,7 @@ import sys
 import json
 import argparse
 import glob
+from datetime import datetime
 from typing import List, Dict, Any
 
 # 모듈 경로 설정
@@ -110,6 +111,103 @@ def load_config(config_path: str) -> List[Dict[str, Any]]:
         config = [config]
     
     return config
+
+
+def export_trades_with_index(
+    results: list,
+    export_dir: str,
+    interval: str
+) -> int:
+    """
+    백테스트 결과들의 거래 내역을 개별 파일 + 인덱스 파일 구조로 저장합니다.
+    
+    저장 구조:
+        export_dir/
+        ├── trades_index.json       # 파일명 ↔ 파라미터 매핑
+        ├── trade_00001.json        # 개별 거래 내역
+        ├── trade_00002.json
+        └── ...
+    
+    Args:
+        results: PerformanceMetrics 객체 리스트
+        export_dir: 저장할 디렉토리 경로
+        interval: 봉 간격 (예: minute60)
+        
+    Returns:
+        저장된 파일 개수
+    """
+    # 디렉토리 생성
+    os.makedirs(export_dir, exist_ok=True)
+    
+    # 인덱스 파일 경로
+    index_filepath = os.path.join(export_dir, 'trades_index.json')
+    
+    # 기존 인덱스 로드 또는 새로 생성
+    if os.path.exists(index_filepath):
+        with open(index_filepath, 'r', encoding='utf-8') as f:
+            trades_index = json.load(f)
+    else:
+        trades_index = {}
+    
+    # 현재 인덱스 번호 (기존 파일 수 기반)
+    next_id = len(trades_index) + 1
+    export_count = 0
+    
+    for result in results:
+        if not result.trade_history:
+            continue
+        
+        # 고유 ID 생성
+        trade_id = f"trade_{next_id:05d}"
+        next_id += 1
+        
+        # 거래 내역 데이터 (trades만 저장, 메타데이터는 인덱스에)
+        trade_data = {
+            "trades": [
+                {
+                    "ticker": t.ticker,
+                    "direction": t.direction,
+                    "entry_date": t.entry_date,
+                    "entry_price": t.entry_price,
+                    "entry_reason": t.entry_reason,
+                    "exit_date": t.exit_date,
+                    "exit_price": t.exit_price,
+                    "exit_reason": t.exit_reason,
+                    "pnl": t.pnl,
+                    "pnl_amount": t.pnl_amount,
+                    "holding_bars": t.holding_bars
+                }
+                for t in result.trade_history
+            ]
+        }
+        
+        # 개별 파일 저장
+        trade_filepath = os.path.join(export_dir, f"{trade_id}.json")
+        with open(trade_filepath, 'w', encoding='utf-8') as f:
+            json.dump(trade_data, f, ensure_ascii=False, indent=2)
+        
+        # 인덱스에 메타데이터 추가
+        trades_index[trade_id] = {
+            "interval": interval,
+            "buy_strategy": result.buy_strategy_name,
+            "buy_params": result.buy_params,
+            "sell_strategy": result.sell_strategy_name,
+            "sell_params": result.sell_params,
+            "max_position_cnt": result.max_position_cnt,
+            "total_pnl": result.total_pnl,
+            "win_ratio": result.win_ratio,
+            "trade_count": result.trade_count,
+            "mdd": result.mdd,
+            "exported_at": datetime.now().isoformat()
+        }
+        
+        export_count += 1
+    
+    # 인덱스 파일 저장
+    with open(index_filepath, 'w', encoding='utf-8') as f:
+        json.dump(trades_index, f, ensure_ascii=False, indent=2)
+    
+    return export_count
 
 
 def parse_xgb_model_name(model_name: str, market: str, interval: str) -> Dict[str, Any]:
@@ -409,6 +507,8 @@ Examples:
                         help='Minimum trades filter (default: 1)')
     parser.add_argument('--output', type=str, default=None,
                         help='Output CSV file path (optional)')
+    parser.add_argument('--export_trades', type=str, default=None,
+                        help='Directory to export trade history as JSON (e.g., var/trades/)')
     parser.add_argument('--checkpoint_interval', type=int, default=100,
                         help='Save results every N combinations (default: 100, only for parallel mode)')
     
@@ -530,7 +630,9 @@ Examples:
             is_timeseries_backtest=args.is_timeseries_backtest,
             n_workers=args.workers,
             checkpoint_interval=args.checkpoint_interval,
-            checkpoint_file=args.output  # 중간 결과를 output 파일에 저장
+            checkpoint_file=args.output,  # 중간 결과를 output 파일에 저장
+            export_trades_dir=args.export_trades,  # 거래 내역 저장 디렉토리
+            interval=args.interval  # 봉 간격
         )
     else:
         results = engine.run_cross_combination_test(
@@ -580,6 +682,17 @@ Examples:
                 df = df.sort_values(args.sort_by, ascending=False)
                 df.to_csv(args.output, index=False)
                 print(f"\nAll {len(results)} results saved to: {args.output}")
+            
+            # 거래 내역 저장 (사용자 요청 시)
+            # 개별 파일 + 인덱스 파일 구조로 저장
+            if args.export_trades:
+                export_count = export_trades_with_index(
+                    results=results,
+                    export_dir=args.export_trades,
+                    interval=args.interval
+                )
+                print(f"\n{export_count} strategy results exported to: {args.export_trades}")
+                print(f"Index file: {os.path.join(args.export_trades, 'trades_index.json')}")
     else:
         print("No results found. Check your data and configuration.")
 
