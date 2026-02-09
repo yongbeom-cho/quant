@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createChart, ColorType, CandlestickSeries, LineSeries, HistogramSeries } from 'lightweight-charts';
 
-const ChartComponent = ({ data, configs, onLoadMore }) => {
+const ChartComponent = ({ data, configs, markers = [], onLoadMore }) => {
     const chartContainerRef = useRef();
     const chartRef = useRef();
     const candleSeriesRef = useRef();
@@ -10,10 +10,16 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
     const firstTimeRef = useRef(null);
     const [hoverInfo, setHoverInfo] = useState(null);
     const [crosshairPosition, setCrosshairPosition] = useState(null);
-    
+    const [hoveredMarkerId, setHoveredMarkerId] = useState(null);
+
     // 부모의 onLoadMore를 최신 상태로 참조하기 위함
     const onLoadMoreRef = useRef(onLoadMore);
     useEffect(() => { onLoadMoreRef.current = onLoadMore; }, [onLoadMore]);
+
+    // [중요] markers prop의 최신 값을 이벤트 핸들러 등에서 참조하기 위해 useRef 사용
+    // useEffect나 useCallback 내부에서 markers를 직접 의존성으로 가지면 불필요한 재실행이 발생할 수 있음
+    const markersRef = useRef(markers);
+    useEffect(() => { markersRef.current = markers; }, [markers]);
 
     useEffect(() => {
         const chart = createChart(chartContainerRef.current, {
@@ -21,7 +27,13 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
             grid: { vertLines: { color: '#1e222d' }, horzLines: { color: '#1e222d' } },
             width: chartContainerRef.current.clientWidth,
             height: chartContainerRef.current.clientHeight,
-            timeScale: { borderVisible: false, timeVisible: true, rightOffset: 5, minBarSpacing: 0.5 },
+            timeScale: {
+                borderVisible: false,
+                timeVisible: true,
+                rightOffset: 5,
+                minBarSpacing: 0.5,
+                barSpacing: 12 // 캔들 사이 간격(초기 줌 레벨) 확대
+            },
         });
 
         const candleSeries = chart.addSeries(CandlestickSeries, {
@@ -42,7 +54,7 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
         const handleVisibleRangeChange = () => {
             const range = chart.timeScale().getVisibleRange();
             if (!range || !firstTimeRef.current) return;
-            
+
             // 현재 보이는 첫 번째 봉이 우리가 가진 가장 오래된 봉 근처일 때
             if (range.from < firstTimeRef.current + 10) {
                 onLoadMoreRef.current();
@@ -127,18 +139,35 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                 }
             }
 
+            // [기능 추가] 캔들 호버 시 해당 봉의 모든 거래 내역(진입/청산 등)을 찾아서 툴팁에 표시
+            // markersRef를 사용하여 최신 마커 데이터를 조회 (props 변경에 따른 클로저 문제 해결)
+            let trades = [];
+            if (timeLabel && markersRef.current && markersRef.current.length > 0) {
+                // param.time은 타임스탬프(Unix time)이므로 이를 기준으로 필터링
+                const currentTime = param.time;
+                trades = markersRef.current
+                    .filter(m => m.time === currentTime)
+                    // 거래 내역 리스트의 순서를 보장하기 위해 기존 배열 순서대로 매핑
+                    // 필요 시 m.originalIdx 등으로 정렬 가능
+                    .map((m, idx) => ({
+                        ...m,
+                        groupIndex: idx + 1 // #1, #2 등의 순서 표시용 인덱스
+                    }));
+            }
+
             setHoverInfo({
                 time: timeLabel,
                 candle: candleData ? { ...candleData, yPos: candleYPos } : null,
                 indicators,
+                trades
             });
             setCrosshairPosition({ x: param.point.x, y: param.point.y });
         };
         chart.subscribeCrosshairMove(handleCrosshairMove);
 
-        const handleResize = () => chartRef.current && chartRef.current.applyOptions({ 
-            width: chartContainerRef.current.clientWidth, 
-            height: chartContainerRef.current.clientHeight 
+        const handleResize = () => chartRef.current && chartRef.current.applyOptions({
+            width: chartContainerRef.current.clientWidth,
+            height: chartContainerRef.current.clientHeight
         });
 
         window.addEventListener('resize', handleResize);
@@ -152,14 +181,14 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
 
     useEffect(() => {
         if (!data || data.length === 0 || !chartRef.current) return;
-        
+
         // 모든 업데이트를 requestAnimationFrame으로 배치 처리하여 깜빡임 방지
         requestAnimationFrame(() => {
             // 우리가 가진 가장 과거 시간 저장
             firstTimeRef.current = data[0].time;
-            
+
             // 캔들 데이터 세팅 (null/NaN 값 필터링)
-            const validCandleData = data.filter(d => 
+            const validCandleData = data.filter(d =>
                 d.open != null && !Number.isNaN(d.open) &&
                 d.high != null && !Number.isNaN(d.high) &&
                 d.low != null && !Number.isNaN(d.low) &&
@@ -171,19 +200,25 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
             indicatorSeriesRef.current.forEach(({ series, label, priceScaleId }) => {
                 existingSeriesMap.set(label, { series, priceScaleId });
             });
-            
+
             // indicatorSeriesRef를 초기화하여 중복 방지
             indicatorSeriesRef.current = [];
-            
+
             // 사용할 보조지표 label 집합을 추적
             const usedLabels = new Set();
-            
+
             // 시리즈를 재사용하거나 새로 추가하는 헬퍼 함수
             const getOrCreateSeries = (label, seriesType, options) => {
                 usedLabels.add(label);
                 const existing = existingSeriesMap.get(label);
                 let series = existing ? existing.series : null;
                 const priceScaleId = options.priceScaleId || null;
+
+                // v5 API: chart.addSeries(SeriesType, options) 형식
+                const createSeries = (seriesClass, opts) => {
+                    return chartRef.current.addSeries(seriesClass, opts);
+                };
+
                 if (series) {
                     try {
                         // 기존 시리즈 재사용 - 옵션 업데이트만 수행
@@ -201,349 +236,349 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                         } catch (removeError) {
                             // 이미 제거되었을 수 있음
                         }
-                        series = chartRef.current.addSeries(seriesType, options);
+                        series = createSeries(seriesType, options);
                         existingSeriesMap.set(label, { series, priceScaleId });
                         return { series, priceScaleId };
                     }
                 } else {
                     // 새 시리즈 추가
-                    series = chartRef.current.addSeries(seriesType, options);
+                    series = createSeries(seriesType, options);
                     existingSeriesMap.set(label, { series, priceScaleId });
                     return { series, priceScaleId };
                 }
             };
 
-        // 보조지표를 그룹별로 분류
-        const independentIndicators = [];
-        const priceIndicators = [];
+            // 보조지표를 그룹별로 분류
+            const independentIndicators = [];
+            const priceIndicators = [];
 
-        configs.forEach(conf => {
-            if (['sma', 'ema', 'wma', 'bollinger', 'ichimoku', 'psar', 'donchian'].includes(conf.type)) {
-                priceIndicators.push(conf);
-            } else {
-                // volume, volma, rsi, mfi, cci, atr, adx 등 모두 독립 보조지표로 처리
-                independentIndicators.push(conf);
-            }
-        });
-
-        // volume과 volma가 모두 있으면 하나로 카운트
-        const hasVolume = independentIndicators.some(conf => conf.type === 'volume');
-        const hasVolma = independentIndicators.some(conf => conf.type === 'vol_sma' || conf.type === 'volma');
-        const volumeVolmaCount = (hasVolume && hasVolma) ? 1 : (hasVolume || hasVolma ? 1 : 0);
-        const otherIndicatorsCount = independentIndicators.filter(conf => 
-            conf.type !== 'volume' && conf.type !== 'vol_sma' && conf.type !== 'volma'
-        ).length;
-        
-        // 동적 비율 계산: price는 항상 존재, 나머지 보조지표들이 추가될 때마다 비율 조정
-        // volume과 volma는 같은 pane을 사용하므로 하나로 카운트
-        const totalNonPriceIndicators = volumeVolmaCount + otherIndicatorsCount;
-        
-        // price 비율 계산 (나머지 보조지표 개수에 따라 조정)
-        // 보조지표가 추가될 때 각 보조지표가 최소 크기를 유지하도록 price 비율을 더 빠르게 줄임
-        let priceBottom = 0.1;
-        if (totalNonPriceIndicators === 0) {
-            priceBottom = 0.1; // price만 있을 때
-        } else if (totalNonPriceIndicators === 1) {
-            priceBottom = 0.3; // 보조지표 1개: price 70%, 보조지표 30%
-        } else if (totalNonPriceIndicators === 2) {
-            priceBottom = 0.4; // 보조지표 2개: price 60%, 각 보조지표 약 20%
-        } else if (totalNonPriceIndicators === 3) {
-            priceBottom = 0.45; // 보조지표 3개: price 55%, 각 보조지표 약 15%
-        } else if (totalNonPriceIndicators === 4) {
-            priceBottom = 0.5; // 보조지표 4개: price 50%, 각 보조지표 약 12.5%
-        } else if (totalNonPriceIndicators === 5) {
-            priceBottom = 0.55; // 보조지표 5개: price 45%, 각 보조지표 약 11%
-        } else {
-            priceBottom = 0.6; // 보조지표 6개 이상: price 40%, 각 보조지표 비율 분배
-        }
-
-        // price scaleMargins 업데이트 (캔들 차트는 항상 있음)
-        chartRef.current.priceScale('right').applyOptions({
-            scaleMargins: { top: 0.1, bottom: priceBottom }
-        });
-
-        
-        const calculateMargins = (index, total) => {
-            // 지표가 없을 경우 기본값
-            if (total === 0) return { top: 0.95, bottom: 0.05 };
-        
-            const margin = 0.015;
-            // index가 범위를 벗어나지 않도록 보정
-            const safeIndex = Math.max(0, Math.min(index, total - 1));
-        
-            // priceBottom이 전체 가용 공간의 크기 (예: 0.3)
-            const availableSpace = priceBottom; 
-            
-            // 하나의 보조지표가 차지할 높이 (예: 0.3 / 2 = 0.15)
-            const indicatorHeight = availableSpace / total;
-        
-            // 상단(index 0)부터 순차 배치 계산
-            // index 0: top = 1 - 0.3 = 0.7,  bottom = 0.15 * (2 - 1 - 0) = 0.15
-            // index 1: top = 1 - 0.3 + 0.15 = 0.85, bottom = 0.15 * (2 - 1 - 1) = 0.0
-            
-            const top = (1 - availableSpace) + (safeIndex * indicatorHeight) + margin;
-            const bottom = indicatorHeight * (total - 1 - safeIndex) + margin;
-        
-            // bottom이 음수가 되지 않도록 보정
-            return { 
-                top: Math.max(0, Math.min(1, top)), 
-                bottom: Math.max(0, Math.min(1, bottom)) 
-            };
-        };
-
-        // 1. Price 그룹 지표들 (MA, BB, ICHI, PSAR, DC) - priceScaleId 없이 기본 'right' 사용
-        priceIndicators.forEach(conf => {
-            const baseOptions = { 
-                color: conf.color, 
-                lineWidth: conf.width || 2, 
-                priceLineVisible: false, 
-                lastValueVisible: false 
-            };
-            
-            if (['sma', 'ema', 'wma'].includes(conf.type)) {
-                const key = conf.type.toUpperCase() + conf.period;
-                const lineData = data
-                    .filter(d => d.mas && d.mas[key] != null && !Number.isNaN(d.mas[key]))
-                    .map(d => ({ time: d.time, value: d.mas[key] }));
-                if (lineData.length > 0) {
-                    const { series: s, priceScaleId } = getOrCreateSeries(key, LineSeries, baseOptions);
-                    s.setData(lineData);
-                    indicatorSeriesRef.current.push({ series: s, label: key, priceScaleId });
-                }
-            } else if (conf.type === 'bollinger') {
-                const key = `BB${conf.period}`;
-                const bbData = data.filter(d => d.bbs && d.bbs[key]);
-                if (bbData.length > 0) {
-                    const { series: up, priceScaleId: upPriceScaleId } = getOrCreateSeries(`${key}_UP`, LineSeries, baseOptions);
-                    const { series: lo, priceScaleId: loPriceScaleId } = getOrCreateSeries(`${key}_DN`, LineSeries, baseOptions);
-                    const upData = bbData
-                        .filter(d => d.bbs[key].up != null && !Number.isNaN(d.bbs[key].up))
-                        .map(d => ({ time: d.time, value: d.bbs[key].up }));
-                    const loData = bbData
-                        .filter(d => d.bbs[key].dn != null && !Number.isNaN(d.bbs[key].dn))
-                        .map(d => ({ time: d.time, value: d.bbs[key].dn }));
-                    up.setData(upData);
-                    lo.setData(loData);
-                    indicatorSeriesRef.current.push(
-                        { series: up, label: `${key}_UP`, priceScaleId: upPriceScaleId },
-                        { series: lo, label: `${key}_DN`, priceScaleId: loPriceScaleId }
-                    );
-                }
-            } else if (conf.type === 'ichimoku') {
-                const key = `ICHI${conf.period.replace(/,/g, '_')}`;
-                const ichiData = data.filter(d => d.ichis && d.ichis[key]);
-                if (ichiData.length > 0) {
-                    const { series: sa, priceScaleId: saPriceScaleId } = getOrCreateSeries(`${key}_SA`, LineSeries, baseOptions);
-                    const { series: sb, priceScaleId: sbPriceScaleId } = getOrCreateSeries(`${key}_SB`, LineSeries, { ...baseOptions, color: conf.color + '80' });
-                    const saData = ichiData
-                        .filter(d => d.ichis[key].sa != null && !Number.isNaN(d.ichis[key].sa))
-                        .map(d => ({ time: d.time, value: d.ichis[key].sa }));
-                    const sbData = ichiData
-                        .filter(d => d.ichis[key].sb != null && !Number.isNaN(d.ichis[key].sb))
-                        .map(d => ({ time: d.time, value: d.ichis[key].sb }));
-                    sa.setData(saData);
-                    sb.setData(sbData);
-                    indicatorSeriesRef.current.push(
-                        { series: sa, label: `${key}_SA`, priceScaleId: saPriceScaleId },
-                        { series: sb, label: `${key}_SB`, priceScaleId: sbPriceScaleId }
-                    );
-                }
-            } else if (conf.type === 'psar') {
-                const psarData = data
-                    .filter(d => d.psars && d.psars['PSAR'] != null && !Number.isNaN(d.psars['PSAR']))
-                    .map(d => ({ time: d.time, value: d.psars['PSAR'] }));
-                if (psarData.length > 0) {
-                    const { series: s, priceScaleId } = getOrCreateSeries('PSAR', LineSeries, { 
-                        ...baseOptions, 
-                        lineStyle: 2, 
-                        lineWidth: 0, 
-                        markerType: 'circle',
-                        markerSize: 3
-                    });
-                    s.setData(psarData);
-                    indicatorSeriesRef.current.push({ series: s, label: 'PSAR', priceScaleId });
-                }
-            } else if (conf.type === 'donchian') {
-                const key = `DC${conf.period}`;
-                const dcData = data.filter(d => d.donchians && d.donchians[key]);
-                if (dcData.length > 0) {
-                    const { series: up, priceScaleId: upPriceScaleId } = getOrCreateSeries(`${key}_UP`, LineSeries, baseOptions);
-                    const { series: lo, priceScaleId: loPriceScaleId } = getOrCreateSeries(`${key}_LO`, LineSeries, baseOptions);
-                    const upData = dcData
-                        .filter(d => d.donchians[key].up != null && !Number.isNaN(d.donchians[key].up))
-                        .map(d => ({ time: d.time, value: d.donchians[key].up }));
-                    const loData = dcData
-                        .filter(d => d.donchians[key].lo != null && !Number.isNaN(d.donchians[key].lo))
-                        .map(d => ({ time: d.time, value: d.donchians[key].lo }));
-                    up.setData(upData);
-                    lo.setData(loData);
-                    indicatorSeriesRef.current.push(
-                        { series: up, label: `${key}_UP`, priceScaleId: upPriceScaleId },
-                        { series: lo, label: `${key}_LO`, priceScaleId: loPriceScaleId },
-                    );
-                }
-            }
-        });
-
-        // volume과 volma가 같은 pane을 사용하도록 volumePaneId 추적
-        let volumePaneId = 'pane_VOL';
-
-        // 2. 독립 보조지표들 (RSI, MFI, CCI, ATR, ADX, VOL, VOLMA) - 각각 고유한 priceScaleId 사용 (상단부터 순차 배치)
-        // 실제 pane 인덱스를 추적 (volume/volma는 하나로 카운트)
-        let actualPaneIndex = 0;
-        let volumePaneAssigned = false;
-        let volumePaneIndex = null; // volume이 할당된 실제 pane 인덱스를 저장
-        
-        independentIndicators.forEach((conf, idx) => {
-            const baseOptions = { 
-                color: conf.color, 
-                lineWidth: conf.width || 2, 
-                priceLineVisible: false, 
-                lastValueVisible: false 
-            };
-            
-            // paneIndex 계산: volume과 volma는 같은 pane을 사용
-            let paneIndex;
-            if (conf.type === 'volume' || conf.type === 'vol_sma' || conf.type === 'volma') {
-                if (!volumePaneAssigned) {
-                    // volume/volma의 첫 번째 항목이 실제 pane 인덱스 결정
-                    paneIndex = actualPaneIndex;
-                    volumePaneIndex = actualPaneIndex; // volume pane 인덱스 저장
-                    volumePaneAssigned = true;
-                    actualPaneIndex++; // volume/volma pane 할당 후 다음 pane으로
+            configs.forEach(conf => {
+                if (['sma', 'ema', 'wma', 'bollinger', 'ichimoku', 'psar', 'donchian'].includes(conf.type)) {
+                    priceIndicators.push(conf);
                 } else {
-                    // volma는 volume과 같은 pane 사용
-                    paneIndex = volumePaneIndex; // 저장된 volume pane 인덱스 사용
+                    // volume, volma, rsi, mfi, cci, atr, adx 등 모두 독립 보조지표로 처리
+                    independentIndicators.push(conf);
                 }
+            });
+
+            // volume과 volma가 모두 있으면 하나로 카운트
+            const hasVolume = independentIndicators.some(conf => conf.type === 'volume');
+            const hasVolma = independentIndicators.some(conf => conf.type === 'vol_sma' || conf.type === 'volma');
+            const volumeVolmaCount = (hasVolume && hasVolma) ? 1 : (hasVolume || hasVolma ? 1 : 0);
+            const otherIndicatorsCount = independentIndicators.filter(conf =>
+                conf.type !== 'volume' && conf.type !== 'vol_sma' && conf.type !== 'volma'
+            ).length;
+
+            // 동적 비율 계산: price는 항상 존재, 나머지 보조지표들이 추가될 때마다 비율 조정
+            // volume과 volma는 같은 pane을 사용하므로 하나로 카운트
+            const totalNonPriceIndicators = volumeVolmaCount + otherIndicatorsCount;
+
+            // price 비율 계산 (나머지 보조지표 개수에 따라 조정)
+            // 보조지표가 추가될 때 각 보조지표가 최소 크기를 유지하도록 price 비율을 더 빠르게 줄임
+            let priceBottom = 0.1;
+            if (totalNonPriceIndicators === 0) {
+                priceBottom = 0.1; // price만 있을 때
+            } else if (totalNonPriceIndicators === 1) {
+                priceBottom = 0.3; // 보조지표 1개: price 70%, 보조지표 30%
+            } else if (totalNonPriceIndicators === 2) {
+                priceBottom = 0.4; // 보조지표 2개: price 60%, 각 보조지표 약 20%
+            } else if (totalNonPriceIndicators === 3) {
+                priceBottom = 0.45; // 보조지표 3개: price 55%, 각 보조지표 약 15%
+            } else if (totalNonPriceIndicators === 4) {
+                priceBottom = 0.5; // 보조지표 4개: price 50%, 각 보조지표 약 12.5%
+            } else if (totalNonPriceIndicators === 5) {
+                priceBottom = 0.55; // 보조지표 5개: price 45%, 각 보조지표 약 11%
             } else {
-                // volume/volma가 아닌 지표는 순차적으로 pane 인덱스 할당
-                paneIndex = actualPaneIndex;
-                actualPaneIndex++;
+                priceBottom = 0.6; // 보조지표 6개 이상: price 40%, 각 보조지표 비율 분배
             }
-            
-            // paneIndex가 범위를 벗어나지 않도록 보정
-            if (paneIndex >= totalNonPriceIndicators) {
-                paneIndex = Math.max(0, totalNonPriceIndicators - 1);
-            }
-            
-            // bottom margin이 음수가 되지 않도록 보정
-            const margins = calculateMargins(paneIndex, totalNonPriceIndicators);
-            if (margins.bottom < 0) {
-                margins.bottom = 0;
-            }
-            if (margins.top < 0) {
-                margins.top = 0;
-            }
-            if (margins.top > 1) {
-                margins.top = 1;
-            }
-            if (margins.bottom > 1) {
-                margins.bottom = 1;
-            }
-            
-            if (['rsi', 'mfi', 'cci'].includes(conf.type)) {
-                const key = `${conf.type.toUpperCase()}${conf.period}`;
-                const paneId = `pane_${key}`;
-                const oscData = data
-                    .filter(d => d.oscillators && d.oscillators[key] != null && !Number.isNaN(d.oscillators[key]))
-                    .map(d => ({ time: d.time, value: d.oscillators[key] }));
-                if (oscData.length > 0) {
-                    const { series: s, priceScaleId } = getOrCreateSeries(key, LineSeries, { ...baseOptions, priceScaleId: paneId });
-                    s.setData(oscData);
-                    chartRef.current.priceScale(paneId).applyOptions({ 
-                        scaleMargins: margins,
-                        position: 'right'
-                    });
-                    indicatorSeriesRef.current.push({ series: s, label: key, priceScaleId });
+
+            // price scaleMargins 업데이트 (캔들 차트는 항상 있음)
+            chartRef.current.priceScale('right').applyOptions({
+                scaleMargins: { top: 0.1, bottom: priceBottom }
+            });
+
+
+            const calculateMargins = (index, total) => {
+                // 지표가 없을 경우 기본값
+                if (total === 0) return { top: 0.95, bottom: 0.05 };
+
+                const margin = 0.015;
+                // index가 범위를 벗어나지 않도록 보정
+                const safeIndex = Math.max(0, Math.min(index, total - 1));
+
+                // priceBottom이 전체 가용 공간의 크기 (예: 0.3)
+                const availableSpace = priceBottom;
+
+                // 하나의 보조지표가 차지할 높이 (예: 0.3 / 2 = 0.15)
+                const indicatorHeight = availableSpace / total;
+
+                // 상단(index 0)부터 순차 배치 계산
+                // index 0: top = 1 - 0.3 = 0.7,  bottom = 0.15 * (2 - 1 - 0) = 0.15
+                // index 1: top = 1 - 0.3 + 0.15 = 0.85, bottom = 0.15 * (2 - 1 - 1) = 0.0
+
+                const top = (1 - availableSpace) + (safeIndex * indicatorHeight) + margin;
+                const bottom = indicatorHeight * (total - 1 - safeIndex) + margin;
+
+                // bottom이 음수가 되지 않도록 보정
+                return {
+                    top: Math.max(0, Math.min(1, top)),
+                    bottom: Math.max(0, Math.min(1, bottom))
+                };
+            };
+
+            // 1. Price 그룹 지표들 (MA, BB, ICHI, PSAR, DC) - priceScaleId 없이 기본 'right' 사용
+            priceIndicators.forEach(conf => {
+                const baseOptions = {
+                    color: conf.color,
+                    lineWidth: conf.width || 2,
+                    priceLineVisible: false,
+                    lastValueVisible: false
+                };
+
+                if (['sma', 'ema', 'wma'].includes(conf.type)) {
+                    const key = conf.type.toUpperCase() + conf.period;
+                    const lineData = data
+                        .filter(d => d.mas && d.mas[key] != null && !Number.isNaN(d.mas[key]))
+                        .map(d => ({ time: d.time, value: d.mas[key] }));
+                    if (lineData.length > 0) {
+                        const { series: s, priceScaleId } = getOrCreateSeries(key, LineSeries, baseOptions);
+                        s.setData(lineData);
+                        indicatorSeriesRef.current.push({ series: s, label: key, priceScaleId });
+                    }
+                } else if (conf.type === 'bollinger') {
+                    const key = `BB${conf.period}`;
+                    const bbData = data.filter(d => d.bbs && d.bbs[key]);
+                    if (bbData.length > 0) {
+                        const { series: up, priceScaleId: upPriceScaleId } = getOrCreateSeries(`${key}_UP`, LineSeries, baseOptions);
+                        const { series: lo, priceScaleId: loPriceScaleId } = getOrCreateSeries(`${key}_DN`, LineSeries, baseOptions);
+                        const upData = bbData
+                            .filter(d => d.bbs[key].up != null && !Number.isNaN(d.bbs[key].up))
+                            .map(d => ({ time: d.time, value: d.bbs[key].up }));
+                        const loData = bbData
+                            .filter(d => d.bbs[key].dn != null && !Number.isNaN(d.bbs[key].dn))
+                            .map(d => ({ time: d.time, value: d.bbs[key].dn }));
+                        up.setData(upData);
+                        lo.setData(loData);
+                        indicatorSeriesRef.current.push(
+                            { series: up, label: `${key}_UP`, priceScaleId: upPriceScaleId },
+                            { series: lo, label: `${key}_DN`, priceScaleId: loPriceScaleId }
+                        );
+                    }
+                } else if (conf.type === 'ichimoku') {
+                    const key = `ICHI${conf.period.replace(/,/g, '_')}`;
+                    const ichiData = data.filter(d => d.ichis && d.ichis[key]);
+                    if (ichiData.length > 0) {
+                        const { series: sa, priceScaleId: saPriceScaleId } = getOrCreateSeries(`${key}_SA`, LineSeries, baseOptions);
+                        const { series: sb, priceScaleId: sbPriceScaleId } = getOrCreateSeries(`${key}_SB`, LineSeries, { ...baseOptions, color: conf.color + '80' });
+                        const saData = ichiData
+                            .filter(d => d.ichis[key].sa != null && !Number.isNaN(d.ichis[key].sa))
+                            .map(d => ({ time: d.time, value: d.ichis[key].sa }));
+                        const sbData = ichiData
+                            .filter(d => d.ichis[key].sb != null && !Number.isNaN(d.ichis[key].sb))
+                            .map(d => ({ time: d.time, value: d.ichis[key].sb }));
+                        sa.setData(saData);
+                        sb.setData(sbData);
+                        indicatorSeriesRef.current.push(
+                            { series: sa, label: `${key}_SA`, priceScaleId: saPriceScaleId },
+                            { series: sb, label: `${key}_SB`, priceScaleId: sbPriceScaleId }
+                        );
+                    }
+                } else if (conf.type === 'psar') {
+                    const psarData = data
+                        .filter(d => d.psars && d.psars['PSAR'] != null && !Number.isNaN(d.psars['PSAR']))
+                        .map(d => ({ time: d.time, value: d.psars['PSAR'] }));
+                    if (psarData.length > 0) {
+                        const { series: s, priceScaleId } = getOrCreateSeries('PSAR', LineSeries, {
+                            ...baseOptions,
+                            lineStyle: 2,
+                            lineWidth: 0,
+                            markerType: 'circle',
+                            markerSize: 3
+                        });
+                        s.setData(psarData);
+                        indicatorSeriesRef.current.push({ series: s, label: 'PSAR', priceScaleId });
+                    }
+                } else if (conf.type === 'donchian') {
+                    const key = `DC${conf.period}`;
+                    const dcData = data.filter(d => d.donchians && d.donchians[key]);
+                    if (dcData.length > 0) {
+                        const { series: up, priceScaleId: upPriceScaleId } = getOrCreateSeries(`${key}_UP`, LineSeries, baseOptions);
+                        const { series: lo, priceScaleId: loPriceScaleId } = getOrCreateSeries(`${key}_LO`, LineSeries, baseOptions);
+                        const upData = dcData
+                            .filter(d => d.donchians[key].up != null && !Number.isNaN(d.donchians[key].up))
+                            .map(d => ({ time: d.time, value: d.donchians[key].up }));
+                        const loData = dcData
+                            .filter(d => d.donchians[key].lo != null && !Number.isNaN(d.donchians[key].lo))
+                            .map(d => ({ time: d.time, value: d.donchians[key].lo }));
+                        up.setData(upData);
+                        lo.setData(loData);
+                        indicatorSeriesRef.current.push(
+                            { series: up, label: `${key}_UP`, priceScaleId: upPriceScaleId },
+                            { series: lo, label: `${key}_LO`, priceScaleId: loPriceScaleId },
+                        );
+                    }
                 }
-            } else if (conf.type === 'atr') {
-                const key = `ATR${conf.period}`;
-                const paneId = `pane_${key}`;
-                const atrData = data
-                    .filter(d => d.atrs && d.atrs[key] != null && !Number.isNaN(d.atrs[key]))
-                    .map(d => ({ time: d.time, value: d.atrs[key] }));
-                if (atrData.length > 0) {
-                    const { series: s, priceScaleId } = getOrCreateSeries(key, LineSeries, { ...baseOptions, priceScaleId: paneId });
-                    s.setData(atrData);
-                    chartRef.current.priceScale(paneId).applyOptions({ 
-                        scaleMargins: margins,
-                        position: 'right'
-                    });
-                    indicatorSeriesRef.current.push({ series: s, label: key, priceScaleId });
+            });
+
+            // volume과 volma가 같은 pane을 사용하도록 volumePaneId 추적
+            let volumePaneId = 'pane_VOL';
+
+            // 2. 독립 보조지표들 (RSI, MFI, CCI, ATR, ADX, VOL, VOLMA) - 각각 고유한 priceScaleId 사용 (상단부터 순차 배치)
+            // 실제 pane 인덱스를 추적 (volume/volma는 하나로 카운트)
+            let actualPaneIndex = 0;
+            let volumePaneAssigned = false;
+            let volumePaneIndex = null; // volume이 할당된 실제 pane 인덱스를 저장
+
+            independentIndicators.forEach((conf, idx) => {
+                const baseOptions = {
+                    color: conf.color,
+                    lineWidth: conf.width || 2,
+                    priceLineVisible: false,
+                    lastValueVisible: false
+                };
+
+                // paneIndex 계산: volume과 volma는 같은 pane을 사용
+                let paneIndex;
+                if (conf.type === 'volume' || conf.type === 'vol_sma' || conf.type === 'volma') {
+                    if (!volumePaneAssigned) {
+                        // volume/volma의 첫 번째 항목이 실제 pane 인덱스 결정
+                        paneIndex = actualPaneIndex;
+                        volumePaneIndex = actualPaneIndex; // volume pane 인덱스 저장
+                        volumePaneAssigned = true;
+                        actualPaneIndex++; // volume/volma pane 할당 후 다음 pane으로
+                    } else {
+                        // volma는 volume과 같은 pane 사용
+                        paneIndex = volumePaneIndex; // 저장된 volume pane 인덱스 사용
+                    }
+                } else {
+                    // volume/volma가 아닌 지표는 순차적으로 pane 인덱스 할당
+                    paneIndex = actualPaneIndex;
+                    actualPaneIndex++;
                 }
-            } else if (conf.type === 'adx') {
-                const key = `ADX${conf.period}`;
-                const paneId = `pane_${key}`;
-                const adxData = data.filter(d => d.adxs && d.adxs[key]);
-                if (adxData.length > 0) {
-                    const { series: sAdx, priceScaleId: adxPriceScaleId } = getOrCreateSeries(key, LineSeries, { ...baseOptions, priceScaleId: paneId });
-                    const { series: sPlus, priceScaleId: plusPriceScaleId } = getOrCreateSeries(`${key}_PLUS`, LineSeries, { ...baseOptions, color: '#4CAF50', lineWidth: 1, priceScaleId: paneId });
-                    const { series: sMinus, priceScaleId: minusPriceScaleId } = getOrCreateSeries(`${key}_MINUS`, LineSeries, { ...baseOptions, color: '#F44336', lineWidth: 1, priceScaleId: paneId });
-                    const adxLineData = adxData
-                        .filter(d => d.adxs[key].adx != null && !Number.isNaN(d.adxs[key].adx))
-                        .map(d => ({ time: d.time, value: d.adxs[key].adx }));
-                    const plusLineData = adxData
-                        .filter(d => d.adxs[key].plus != null && !Number.isNaN(d.adxs[key].plus))
-                        .map(d => ({ time: d.time, value: d.adxs[key].plus }));
-                    const minusLineData = adxData
-                        .filter(d => d.adxs[key].minus != null && !Number.isNaN(d.adxs[key].minus))
-                        .map(d => ({ time: d.time, value: d.adxs[key].minus }));
-                    sAdx.setData(adxLineData);
-                    sPlus.setData(plusLineData);
-                    sMinus.setData(minusLineData);
-                    chartRef.current.priceScale(paneId).applyOptions({ 
-                        scaleMargins: margins,
-                        position: 'right'
-                    });
-                    indicatorSeriesRef.current.push(
-                        { series: sAdx, label: key, priceScaleId: adxPriceScaleId },
-                        { series: sPlus, label: `${key}_PLUS`, priceScaleId: plusPriceScaleId },
-                        { series: sMinus, label: `${key}_MINUS`, priceScaleId: minusPriceScaleId },
-                    );
+
+                // paneIndex가 범위를 벗어나지 않도록 보정
+                if (paneIndex >= totalNonPriceIndicators) {
+                    paneIndex = Math.max(0, totalNonPriceIndicators - 1);
                 }
-            } else if (conf.type === 'volume') {
-                const paneId = volumePaneId;
-                const volData = data.filter(d => d.volume != null).map(d => ({
-                    time: d.time,
-                    value: d.volume,
-                    color: d.close >= d.open ? 'rgba(226, 16, 16, 0.6)' : 'rgba(0, 81, 255, 0.6)'
-                }));
-                if (volData.length > 0) {
-                    const { series: s, priceScaleId } = getOrCreateSeries('VOL', HistogramSeries, { 
-                        priceFormat: { type: 'volume' }, 
-                        priceScaleId: paneId,
-                        priceLineVisible: false,
-                        lastValueVisible: false
-                    });
-                    s.setData(volData);
-                    chartRef.current.priceScale(paneId).applyOptions({ 
-                        scaleMargins: margins,
-                        position: 'right'
-                    });
-                    indicatorSeriesRef.current.push({ series: s, label: 'VOL', priceScaleId });
+
+                // bottom margin이 음수가 되지 않도록 보정
+                const margins = calculateMargins(paneIndex, totalNonPriceIndicators);
+                if (margins.bottom < 0) {
+                    margins.bottom = 0;
                 }
-            } else if (conf.type === 'vol_sma' || conf.type === 'volma') {
-                const key = `VOLMA${conf.period}`;
-                const paneId = volumePaneId; // volume과 같은 pane 사용
-                const volmaData = data
-                    .filter(d => d.volumes && d.volumes[key] != null && !Number.isNaN(d.volumes[key]))
-                    .map(d => ({ time: d.time, value: d.volumes[key] }));
-                if (volmaData.length > 0) {
-                    const { series: s, priceScaleId } = getOrCreateSeries(key, LineSeries, { ...baseOptions, priceScaleId: paneId });
-                    s.setData(volmaData);
-                    // volume이 이미 priceScale을 설정했을 수 있으므로, 없을 때만 설정
-                    try {
-                        chartRef.current.priceScale(paneId).applyOptions({ 
+                if (margins.top < 0) {
+                    margins.top = 0;
+                }
+                if (margins.top > 1) {
+                    margins.top = 1;
+                }
+                if (margins.bottom > 1) {
+                    margins.bottom = 1;
+                }
+
+                if (['rsi', 'mfi', 'cci'].includes(conf.type)) {
+                    const key = `${conf.type.toUpperCase()}${conf.period}`;
+                    const paneId = `pane_${key}`;
+                    const oscData = data
+                        .filter(d => d.oscillators && d.oscillators[key] != null && !Number.isNaN(d.oscillators[key]))
+                        .map(d => ({ time: d.time, value: d.oscillators[key] }));
+                    if (oscData.length > 0) {
+                        const { series: s, priceScaleId } = getOrCreateSeries(key, LineSeries, { ...baseOptions, priceScaleId: paneId });
+                        s.setData(oscData);
+                        chartRef.current.priceScale(paneId).applyOptions({
                             scaleMargins: margins,
                             position: 'right'
                         });
-                    } catch (e) {
-                        // 이미 설정되어 있으면 무시
+                        indicatorSeriesRef.current.push({ series: s, label: key, priceScaleId });
                     }
-                    indicatorSeriesRef.current.push({ series: s, label: key, priceScaleId });
+                } else if (conf.type === 'atr') {
+                    const key = `ATR${conf.period}`;
+                    const paneId = `pane_${key}`;
+                    const atrData = data
+                        .filter(d => d.atrs && d.atrs[key] != null && !Number.isNaN(d.atrs[key]))
+                        .map(d => ({ time: d.time, value: d.atrs[key] }));
+                    if (atrData.length > 0) {
+                        const { series: s, priceScaleId } = getOrCreateSeries(key, LineSeries, { ...baseOptions, priceScaleId: paneId });
+                        s.setData(atrData);
+                        chartRef.current.priceScale(paneId).applyOptions({
+                            scaleMargins: margins,
+                            position: 'right'
+                        });
+                        indicatorSeriesRef.current.push({ series: s, label: key, priceScaleId });
+                    }
+                } else if (conf.type === 'adx') {
+                    const key = `ADX${conf.period}`;
+                    const paneId = `pane_${key}`;
+                    const adxData = data.filter(d => d.adxs && d.adxs[key]);
+                    if (adxData.length > 0) {
+                        const { series: sAdx, priceScaleId: adxPriceScaleId } = getOrCreateSeries(key, LineSeries, { ...baseOptions, priceScaleId: paneId });
+                        const { series: sPlus, priceScaleId: plusPriceScaleId } = getOrCreateSeries(`${key}_PLUS`, LineSeries, { ...baseOptions, color: '#4CAF50', lineWidth: 1, priceScaleId: paneId });
+                        const { series: sMinus, priceScaleId: minusPriceScaleId } = getOrCreateSeries(`${key}_MINUS`, LineSeries, { ...baseOptions, color: '#F44336', lineWidth: 1, priceScaleId: paneId });
+                        const adxLineData = adxData
+                            .filter(d => d.adxs[key].adx != null && !Number.isNaN(d.adxs[key].adx))
+                            .map(d => ({ time: d.time, value: d.adxs[key].adx }));
+                        const plusLineData = adxData
+                            .filter(d => d.adxs[key].plus != null && !Number.isNaN(d.adxs[key].plus))
+                            .map(d => ({ time: d.time, value: d.adxs[key].plus }));
+                        const minusLineData = adxData
+                            .filter(d => d.adxs[key].minus != null && !Number.isNaN(d.adxs[key].minus))
+                            .map(d => ({ time: d.time, value: d.adxs[key].minus }));
+                        sAdx.setData(adxLineData);
+                        sPlus.setData(plusLineData);
+                        sMinus.setData(minusLineData);
+                        chartRef.current.priceScale(paneId).applyOptions({
+                            scaleMargins: margins,
+                            position: 'right'
+                        });
+                        indicatorSeriesRef.current.push(
+                            { series: sAdx, label: key, priceScaleId: adxPriceScaleId },
+                            { series: sPlus, label: `${key}_PLUS`, priceScaleId: plusPriceScaleId },
+                            { series: sMinus, label: `${key}_MINUS`, priceScaleId: minusPriceScaleId },
+                        );
+                    }
+                } else if (conf.type === 'volume') {
+                    const paneId = volumePaneId;
+                    const volData = data.filter(d => d.volume != null).map(d => ({
+                        time: d.time,
+                        value: d.volume,
+                        color: d.close >= d.open ? 'rgba(226, 16, 16, 0.6)' : 'rgba(0, 81, 255, 0.6)'
+                    }));
+                    if (volData.length > 0) {
+                        const { series: s, priceScaleId } = getOrCreateSeries('VOL', HistogramSeries, {
+                            priceFormat: { type: 'volume' },
+                            priceScaleId: paneId,
+                            priceLineVisible: false,
+                            lastValueVisible: false
+                        });
+                        s.setData(volData);
+                        chartRef.current.priceScale(paneId).applyOptions({
+                            scaleMargins: margins,
+                            position: 'right'
+                        });
+                        indicatorSeriesRef.current.push({ series: s, label: 'VOL', priceScaleId });
+                    }
+                } else if (conf.type === 'vol_sma' || conf.type === 'volma') {
+                    const key = `VOLMA${conf.period}`;
+                    const paneId = volumePaneId; // volume과 같은 pane 사용
+                    const volmaData = data
+                        .filter(d => d.volumes && d.volumes[key] != null && !Number.isNaN(d.volumes[key]))
+                        .map(d => ({ time: d.time, value: d.volumes[key] }));
+                    if (volmaData.length > 0) {
+                        const { series: s, priceScaleId } = getOrCreateSeries(key, LineSeries, { ...baseOptions, priceScaleId: paneId });
+                        s.setData(volmaData);
+                        // volume이 이미 priceScale을 설정했을 수 있으므로, 없을 때만 설정
+                        try {
+                            chartRef.current.priceScale(paneId).applyOptions({
+                                scaleMargins: margins,
+                                position: 'right'
+                            });
+                        } catch (e) {
+                            // 이미 설정되어 있으면 무시
+                        }
+                        indicatorSeriesRef.current.push({ series: s, label: key, priceScaleId });
+                    }
                 }
-            }
-        });
+            });
 
             // 사용되지 않은 시리즈 제거 (configs에서 제거된 보조지표)
             // 모든 시리즈를 한 번에 수집한 후 한 번에 제거하여 렌더링 최소화
@@ -553,7 +588,7 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                     seriesToRemove.push({ series, label });
                 }
             });
-            
+
             // 모든 시리즈를 한 번에 제거
             seriesToRemove.forEach(({ series, label }) => {
                 try {
@@ -573,11 +608,257 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
         });
     }, [data, configs]);
 
+    // 마커 설정 (markers prop이 변경될 때마다 업데이트)
+    // v5에서는 setMarkers가 제거되어 HTML 오버레이로 대체
+    const [markerElements, setMarkerElements] = useState([]);
+
+    // 마커 위치 업데이트 함수
+    const updateMarkers = useCallback(() => {
+        if (!chartRef.current || !candleSeriesRef.current || !markers || markers.length === 0) {
+            setMarkerElements([]);
+            return;
+        }
+
+        const timeScale = chartRef.current.timeScale();
+
+        // [마커 렌더링 핵심 로직]
+        // 1. 시간(Time) 기준으로 마커들을 그룹화합니다. (같은 봉에 여러 거래가 있을 수 있음)
+        const groupedMarkers = {};
+        markers.forEach((m, originalIdx) => {
+            const key = `${m.time}`;
+            if (!groupedMarkers[key]) {
+                groupedMarkers[key] = [];
+            }
+            // 원본 인덱스(originalIdx)를 저장하여 추후 정렬이나 참조에 사용
+            groupedMarkers[key].push({ ...m, originalIdx });
+        });
+
+        const elements = [];
+        Object.values(groupedMarkers).forEach(group => {
+            // 2. 각 그룹 내에서 마커 위치 계산
+            // 같은 봉에 마커가 여러 개일 경우 겹치지 않게 y축 오프셋을 조정해야 함
+
+            // 포지션(위/아래)별로 몇 번째 마커인지 카운트하여 쌓아 올림
+            let aboveCount = 0;
+            let belowCount = 0;
+
+            group.forEach((m, idx) => {
+                const time = m.time;
+                const x = timeScale.timeToCoordinate(time);
+
+                if (x === null) return;
+
+                // 가격 좌표 계산
+                let price = m.price;
+                if (!price) {
+                    const candleData = candleSeriesRef.current?.dataByIndex?.(m.originalIdx);
+                    // price 없으면 없는대로 처리
+                }
+
+                let y;
+                if (price) {
+                    y = candleSeriesRef.current.priceToCoordinate(price);
+                } else {
+                    return;
+                }
+
+                if (y === null) return;
+
+                // 3. 겹침 방지 로직 (Stacking)
+                // baseOffset: 캔들(고가/저가)로부터 떨어진 기본 거리
+                // stackGap: 마커들 사이의 간격
+                const baseOffset = 30;
+                const stackGap = 25;
+
+                let offset = baseOffset;
+
+                // 포지션에 따라 위쪽(aboveBar) 또는 아래쪽(belowBar)으로 쌓아 나감
+                if (m.position === 'aboveBar') {
+                    // 매도/청산 등은 캔들 위에 표시 (y값 감소 방향)
+                    offset += (aboveCount * stackGap);
+                    aboveCount++;
+                } else {
+                    // 매수 등은 캔들 아래에 표시 (y값 증가 방향)
+                    offset += (belowCount * stackGap);
+                    belowCount++;
+                }
+
+                // 전체 그룹 내에서의 순서 (1부터 시작)
+                const orderNum = idx + 1;
+                const totalInGroup = group.length;
+
+                elements.push({
+                    id: `${m.time}-${idx}`,
+                    x,
+                    y: m.position === 'aboveBar' ? y - offset : y + offset, // 포지션 방향대로 오프셋 적용
+                    color: m.color,
+                    shape: m.shape,
+                    text: m.text,
+                    position: m.position,
+                    details: m.details,
+                    params: m,
+                    groupIndex: orderNum,
+                    totalInGroup: totalInGroup,
+                    isGrouped: totalInGroup > 1
+                });
+            });
+        });
+
+        setMarkerElements(elements);
+    }, [markers]);
+
+
+
+
+
+
+    useEffect(() => {
+        if (!chartRef.current) return;
+
+        const timeScale = chartRef.current.timeScale();
+
+        // 초기 업데이트
+        updateMarkers();
+
+        // 차트 스크롤/줌 이벤트 구독
+        const onVisibleTimeRangeChange = () => {
+            updateMarkers();
+        };
+
+        timeScale.subscribeVisibleTimeRangeChange(onVisibleTimeRangeChange);
+
+        return () => {
+            timeScale.unsubscribeVisibleTimeRangeChange(onVisibleTimeRangeChange);
+        };
+    }, [markers, updateMarkers]);
+
+    // 컨테이너 크기 변경 감지 (사이드바 토글 등)
+    useEffect(() => {
+        if (!chartContainerRef.current) return;
+
+        const resizeObserver = new ResizeObserver(entries => {
+            if (entries.length === 0 || !entries[0].target) return;
+
+            const { width, height } = entries[0].contentRect;
+
+            // ResizeObserver loop limit exceeded 오류 방지를 위해 requestAnimationFrame 사용
+            if (width && height) {
+                window.requestAnimationFrame(() => {
+                    if (chartRef.current) {
+                        chartRef.current.applyOptions({ width, height });
+                        // 리사이즈 후 마커 위치 재계산
+                        setTimeout(() => {
+                            if (typeof updateMarkers === 'function') updateMarkers();
+                        }, 0);
+                    }
+                });
+            }
+        });
+
+        resizeObserver.observe(chartContainerRef.current);
+
+        return () => resizeObserver.disconnect();
+    }, [updateMarkers]);
+
     return (
         <div
             ref={chartContainerRef}
-            style={{ width: '100%', height: '100%', position: 'relative', fontFamily: 'Roboto, -apple-system, BlinkMacSystemFont, system-ui, sans-serif' }}
+            style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', fontFamily: 'Roboto, -apple-system, BlinkMacSystemFont, system-ui, sans-serif' }}
         >
+            {/* 마커 레이어 */}
+            {markerElements.map(m => (
+                <div key={m.id} style={{
+                    position: 'absolute',
+                    left: m.x,
+                    top: m.y,
+                    transform: 'translate(-50%, -50%)',
+                    zIndex: 100, // z-index 대폭 상향
+                    pointerEvents: 'none',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                }}>
+                    <div
+                        onMouseEnter={() => setHoveredMarkerId(m.id)}
+                        onMouseLeave={() => setHoveredMarkerId(null)}
+                        style={{
+                            fontSize: '18px',
+                            color: m.color,
+                            textShadow: '0 2px 4px rgba(0,0,0,0.5)',
+                            transition: 'transform 0.1s',
+                            cursor: 'help',
+                            pointerEvents: 'auto',
+                            padding: '10px', // 히트박스 확대
+                            margin: '-10px', // 레이아웃 영향 최소화
+                            transition: 'transform 0.1s',
+                            cursor: 'help',
+                            pointerEvents: 'auto'
+                        }}
+                    >
+                        {m.shape === 'arrowUp' ? '▲' : (m.shape === 'arrowDown' ? '▼' : '●')}
+                    </div>
+                    {/* 별도의 배지 div 제거됨 */}
+
+                    {/* 툴팁 (Hover 시에만 표시) */}
+                    {hoveredMarkerId === m.id && (
+                        <div style={{
+                            position: 'absolute',
+                            top: m.position === 'aboveBar' ? '-45px' : '45px',
+                            backgroundColor: 'rgba(20, 24, 35, 0.95)',
+                            border: `1px solid ${m.color}`,
+                            color: '#d1d4dc',
+                            padding: '8px 12px',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            whiteSpace: 'nowrap',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                            fontWeight: '500',
+                            zIndex: 100,
+                            textAlign: 'left',
+                            minWidth: m.details ? '180px' : 'auto'
+                        }}>
+                            {m.details ? (
+                                <div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '4px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                                            <span style={{ fontWeight: 'bold', color: m.color, marginRight: '6px' }}>
+                                                {m.details.type === 'entry' ? 'OPEN' : 'CLOSE'}
+                                            </span>
+                                            {/* 툴팁 내부에 순서 표시 */}
+                                            {m.isGrouped && (
+                                                <span style={{
+                                                    fontSize: '10px',
+                                                    backgroundColor: 'rgba(255,255,255,0.2)',
+                                                    padding: '1px 4px',
+                                                    borderRadius: '4px',
+                                                    color: '#fff'
+                                                }}>
+                                                    #{m.groupIndex}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <span style={{ fontSize: '10px', color: '#848e9c' }}>{m.details.date}</span>
+                                    </div>
+                                    <div style={{ marginBottom: '2px' }}>Pass: <span style={{ color: '#fff' }}>{m.details.price?.toLocaleString()}</span></div>
+                                    {m.details.type === 'exit' && (
+                                        <>
+                                            <div style={{ marginBottom: '2px' }}>PnL: <span style={{ color: m.details.pnl > 0 ? '#4caf50' : '#ef5350', fontWeight: 'bold' }}>{(m.details.pnl * 100).toFixed(2)}%</span></div>
+                                            <div style={{ marginBottom: '2px' }}>Amt: <span style={{ color: m.details.pnlAmount > 0 ? '#4caf50' : '#ef5350' }}>{m.details.pnlAmount?.toFixed(0)}</span></div>
+                                            <div style={{ marginBottom: '2px' }}>Held: <span style={{ color: '#fff' }}>{m.details.holdingBars}</span> bars</div>
+                                        </>
+                                    )}
+                                    <div style={{ marginTop: '6px', fontSize: '11px', color: '#b2b5be', fontStyle: 'italic' }}>
+                                        "{m.details.reason}"
+                                    </div>
+                                </div>
+                            ) : (
+                                m.text
+                            )}
+                        </div>
+                    )}
+                </div>
+            ))}
+
             {hoverInfo && (
                 <div
                     style={{
@@ -607,6 +888,86 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                             <span>C {hoverInfo.candle.close?.toFixed?.(2)}</span>
                         </div>
                     )}
+                    {/* [거래 내역 UI] 캔들 호버 시 거래 정보 순차 표시 */}
+                    {hoverInfo.trades && hoverInfo.trades.length > 0 && (
+                        <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                            <div style={{ color: '#848e9c', marginBottom: 4, fontSize: 11, fontWeight: 'bold' }}>
+                                TRADES ({hoverInfo.trades.length})
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                {hoverInfo.trades.map((trade, idx) => (
+                                    <div key={idx} style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        backgroundColor: 'rgba(255,255,255,0.03)',
+                                        padding: '4px 6px',
+                                        borderRadius: '4px'
+                                    }}>
+                                        {/* 1. 순서 및 포지션 타입 (LONG/SHORT/CLOSE) */}
+                                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                                            <span style={{
+                                                color: '#fff',
+                                                backgroundColor: trade.details?.type === 'entry'
+                                                    ? (trade.position === 'aboveBar' ? '#ef5350' : '#4caf50') // SHORT=Red, LONG=Green
+                                                    : '#848e9c', // CLOSE=Gray
+                                                fontSize: '10px',
+                                                padding: '1px 4px',
+                                                borderRadius: '3px',
+                                                marginRight: '6px',
+                                                minWidth: '24px',
+                                                textAlign: 'center'
+                                            }}>
+                                                #{idx + 1}
+                                            </span>
+                                            <span style={{
+                                                color: trade.details?.type === 'entry'
+                                                    ? (trade.position === 'aboveBar' ? '#ef5350' : '#4caf50')
+                                                    : '#d1d4dc',
+                                                fontWeight: 'bold',
+                                                fontSize: '11px',
+                                                marginRight: '6px'
+                                            }}>
+                                                {trade.details?.type === 'entry'
+                                                    ? (trade.position === 'aboveBar' ? 'SHORT' : 'LONG')
+                                                    : 'CLOSE'}
+                                            </span>
+                                            <span style={{ color: '#d1d4dc', fontSize: '11px', marginRight: '8px' }}>
+                                                {trade.price ? trade.price.toLocaleString() : '-'}
+                                            </span>
+                                        </div>
+                                        {/* 2. 상세 정보 (거래 이유, PnL) */}
+                                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                                            {/* 거래 이유(Reason) 표시 - 내용이 길 경우 말줄임표 처리 */}
+                                            {trade.details && trade.details.reason && (
+                                                <span style={{
+                                                    color: '#848e9c',
+                                                    fontSize: '10px',
+                                                    fontStyle: 'italic',
+                                                    marginRight: '8px',
+                                                    maxWidth: '120px',
+                                                    whiteSpace: 'nowrap',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis'
+                                                }}>
+                                                    {trade.details.reason}
+                                                </span>
+                                            )}
+                                            {trade.details && trade.details.pnl !== undefined && (
+                                                <span style={{
+                                                    color: trade.details.pnl > 0 ? '#4caf50' : '#ef5350',
+                                                    fontSize: '11px',
+                                                    fontWeight: 'bold'
+                                                }}>
+                                                    {(trade.details.pnl * 100).toFixed(2)}%
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
             {hoverInfo && crosshairPosition && (() => {
@@ -614,9 +975,9 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                 const allLabels = [];
                 const LABEL_HEIGHT = 20; // 라벨 높이 (픽셀)
                 const MIN_SPACING = 28; // 최소 간격 (픽셀) - 라벨이 완전히 겹치지 않도록 여유 공간 확보
-                
+
                 // OHLC 라벨 정보 수집
-                if (hoverInfo.candle && hoverInfo.candle.yPos !== null && hoverInfo.candle.yPos !== undefined && 
+                if (hoverInfo.candle && hoverInfo.candle.yPos !== null && hoverInfo.candle.yPos !== undefined &&
                     typeof hoverInfo.candle.yPos === 'number' && !isNaN(hoverInfo.candle.yPos) && isFinite(hoverInfo.candle.yPos)) {
                     const baseY = hoverInfo.candle.yPos;
                     if (hoverInfo.candle.open != null && !Number.isNaN(hoverInfo.candle.open)) {
@@ -632,7 +993,7 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                         allLabels.push({ type: 'ohlc', key: 'C', y: baseY + 30, originalY: baseY, offset: 30 });
                     }
                 }
-                
+
                 // 보조지표 라벨 정보 수집
                 if (hoverInfo.indicators && hoverInfo.indicators.length > 0) {
                     hoverInfo.indicators.forEach((ind, idx) => {
@@ -640,37 +1001,37 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                         if (ind.yPos !== null && ind.yPos !== undefined && typeof ind.yPos === 'number' && !isNaN(ind.yPos) && isFinite(ind.yPos)) {
                             labelTop = ind.yPos;
                         }
-                        
+
                         // VOL과 VOLMA가 함께 있을 때 VOL을 약간 위로 올림
                         const hasVol = hoverInfo.indicators.some(i => i.label === 'VOL');
                         const hasVolma = hoverInfo.indicators.some(i => i.label && i.label.startsWith('VOLMA'));
                         if (hasVol && hasVolma && ind.label === 'VOL' && labelTop !== null) {
                             labelTop = labelTop - 20;
                         }
-                        
+
                         if (labelTop === null && crosshairPosition.y !== null && crosshairPosition.y !== undefined) {
                             labelTop = crosshairPosition.y + (idx * 25);
                         }
-                        
+
                         if (labelTop !== null && !isNaN(labelTop) && isFinite(labelTop)) {
                             allLabels.push({ type: 'indicator', label: ind.label, value: ind.value, y: labelTop, originalY: labelTop });
                         }
                     });
                 }
-                
+
                 // y 좌표 기준으로 정렬
                 allLabels.sort((a, b) => a.y - b.y);
-                
+
                 // 겹치는 라벨들을 조정 (한 번의 순회로 모든 겹침 해결)
                 for (let i = 1; i < allLabels.length; i++) {
                     const current = allLabels[i];
                     const prev = allLabels[i - 1];
                     const distance = current.y - prev.y;
-                    
+
                     if (distance < MIN_SPACING) {
                         // 겹치는 경우, 현재 라벨을 아래로 이동하여 최소 간격 확보
                         current.y = prev.y + MIN_SPACING;
-                        
+
                         // 이전 라벨들도 다시 확인 (조정된 위치가 더 이전 라벨과 겹칠 수 있음)
                         for (let j = i - 2; j >= 0; j--) {
                             const prevPrev = allLabels[j];
@@ -683,17 +1044,17 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                         }
                     }
                 }
-                
+
                 // 역방향으로도 확인하여 위쪽 겹침 해결
                 for (let i = allLabels.length - 2; i >= 0; i--) {
                     const current = allLabels[i];
                     const next = allLabels[i + 1];
                     const distance = next.y - current.y;
-                    
+
                     if (distance < MIN_SPACING) {
                         // 겹치는 경우, 현재 라벨을 위로 이동
                         current.y = next.y - MIN_SPACING;
-                        
+
                         // 다음 라벨들도 다시 확인
                         for (let j = i + 2; j < allLabels.length; j++) {
                             const nextNext = allLabels[j];
@@ -706,75 +1067,75 @@ const ChartComponent = ({ data, configs, onLoadMore }) => {
                         }
                     }
                 }
-                
-                                return (
-                <>
-                    {/* OHLC 라벨 표시 - 각각 별도 줄에 표시 */}
-                    {hoverInfo.candle && hoverInfo.candle.yPos !== null && hoverInfo.candle.yPos !== undefined && 
-                     typeof hoverInfo.candle.yPos === 'number' && !isNaN(hoverInfo.candle.yPos) && isFinite(hoverInfo.candle.yPos) && (
-                        <>
-                            {allLabels
-                                .filter(label => label.type === 'ohlc')
-                                .map(label => {
-                                    const value = label.key === 'O' ? hoverInfo.candle.open :
-                                                 label.key === 'H' ? hoverInfo.candle.high :
-                                                 label.key === 'L' ? hoverInfo.candle.low :
-                                                 hoverInfo.candle.close;
-                                    if (value == null || Number.isNaN(value)) return null;
-                                    
-                                return (
-                                    <div
-                                            key={`ohlc-${label.key}`}
-                                        style={{
-                                                position: 'absolute',
-                                                left: `${crosshairPosition.x + 5}px`,
-                                                top: `${label.y}px`,
-                                                padding: '4px 6px',
-                                                backgroundColor: 'rgba(9,10,13,0.9)',
-                                                border: '1px solid #2b2b43',
-                                                borderRadius: 3,
-                                                fontSize: 10,
-                                                color: '#d1d4dc',
-                                                pointerEvents: 'none',
-                                                whiteSpace: 'nowrap',
-                                                zIndex: 10,
-                                                transform: 'translateY(-50%)',
-                                            }}
-                                        >
-                                            <span style={{ color: '#f2ff00', marginRight: 4 }}>{label.key}:</span>
-                                            <span>{value.toFixed(2)}</span>
-                                    </div>
-                                );
-                            })}
-                        </>
-                    )}
-                    {/* 보조지표 라벨 표시 */}
-                    {allLabels
-                        .filter(label => label.type === 'indicator')
-                        .map((label, idx) => (
-                            <div
-                                key={`${label.label}-${idx}`}
-                                style={{
-                                    position: 'absolute',
-                                    left: `${crosshairPosition.x + 5}px`,
-                                    top: `${label.y}px`,
-                                    padding: '4px 6px',
-                                    backgroundColor: 'rgba(9,10,13,0.9)',
-                                    border: '1px solid #2b2b43',
-                                    borderRadius: 3,
-                                    fontSize: 10,
-                                    color: '#d1d4dc',
-                                    pointerEvents: 'none',
-                                    whiteSpace: 'nowrap',
-                                    zIndex: 10,
-                                    transform: 'translateY(-50%)',
-                                }}
-                            >
-                                <span style={{ color: '#4cafef', marginRight: 4 }}>{label.label}:</span>
-                                <span>{Number(label.value).toFixed(2)}</span>
-                </div>
-                        ))}
-                </>
+
+                return (
+                    <>
+                        {/* OHLC 라벨 표시 - 각각 별도 줄에 표시 */}
+                        {hoverInfo.candle && hoverInfo.candle.yPos !== null && hoverInfo.candle.yPos !== undefined &&
+                            typeof hoverInfo.candle.yPos === 'number' && !isNaN(hoverInfo.candle.yPos) && isFinite(hoverInfo.candle.yPos) && (
+                                <>
+                                    {allLabels
+                                        .filter(label => label.type === 'ohlc')
+                                        .map(label => {
+                                            const value = label.key === 'O' ? hoverInfo.candle.open :
+                                                label.key === 'H' ? hoverInfo.candle.high :
+                                                    label.key === 'L' ? hoverInfo.candle.low :
+                                                        hoverInfo.candle.close;
+                                            if (value == null || Number.isNaN(value)) return null;
+
+                                            return (
+                                                <div
+                                                    key={`ohlc-${label.key}`}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        left: `${crosshairPosition.x + 5}px`,
+                                                        top: `${label.y}px`,
+                                                        padding: '4px 6px',
+                                                        backgroundColor: 'rgba(9,10,13,0.9)',
+                                                        border: '1px solid #2b2b43',
+                                                        borderRadius: 3,
+                                                        fontSize: 10,
+                                                        color: '#d1d4dc',
+                                                        pointerEvents: 'none',
+                                                        whiteSpace: 'nowrap',
+                                                        zIndex: 10,
+                                                        transform: 'translateY(-50%)',
+                                                    }}
+                                                >
+                                                    <span style={{ color: '#f2ff00', marginRight: 4 }}>{label.key}:</span>
+                                                    <span>{value.toFixed(2)}</span>
+                                                </div>
+                                            );
+                                        })}
+                                </>
+                            )}
+                        {/* 보조지표 라벨 표시 */}
+                        {allLabels
+                            .filter(label => label.type === 'indicator')
+                            .map((label, idx) => (
+                                <div
+                                    key={`${label.label}-${idx}`}
+                                    style={{
+                                        position: 'absolute',
+                                        left: `${crosshairPosition.x + 5}px`,
+                                        top: `${label.y}px`,
+                                        padding: '4px 6px',
+                                        backgroundColor: 'rgba(9,10,13,0.9)',
+                                        border: '1px solid #2b2b43',
+                                        borderRadius: 3,
+                                        fontSize: 10,
+                                        color: '#d1d4dc',
+                                        pointerEvents: 'none',
+                                        whiteSpace: 'nowrap',
+                                        zIndex: 10,
+                                        transform: 'translateY(-50%)',
+                                    }}
+                                >
+                                    <span style={{ color: '#4cafef', marginRight: 4 }}>{label.label}:</span>
+                                    <span>{Number(label.value).toFixed(2)}</span>
+                                </div>
+                            ))}
+                    </>
                 );
             })()}
         </div>

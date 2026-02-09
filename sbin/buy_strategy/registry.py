@@ -26,11 +26,12 @@ def _get_strategy_registry() -> Dict[str, Type[BaseBuyStrategy]]:
     # VBT Prev Candle 전략
     from .vbt_prev_candle_strategy import VBTPrevCandleStrategy
     
-    # New strategies
-    # from .adaptive_vbt_strategy import AdaptiveVBTStrategy
-    # from .volume_weighted_vbt_strategy import VolumeWeightedVBTStrategy
-    # from .mean_reversion_momentum_strategy import MeanReversionMomentumStrategy
-    # from .breakout_confirmation_strategy import BreakoutConfirmationStrategy
+    # 5개 신규 전략 임포트
+    from .adx_momentum_strategy import ADXMomentumStrategy
+    from .bb_squeeze_strategy import BBSqueezeStrategy
+    from .macd_divergence_strategy import MACDDivergenceStrategy
+    from .atr_channel_strategy import ATRChannelStrategy
+    from .vwap_reversion_strategy import VWAPReversionStrategy
     
     return {
         # VBT 전략
@@ -39,20 +40,27 @@ def _get_strategy_registry() -> Dict[str, Type[BaseBuyStrategy]]:
         # VBT Enhanced 전략
         'vbt_with_filters_enhanced': VBTEnhancedBuyStrategy,
         
-        # Bollinger Band (Percent B) Rebound 전략
-        'pb_rebound': PBReboundBuyStrategy,
-        
         # VBT Prev Candle 전략
         'volatility_breakout_prev_candle': VBTPrevCandleStrategy,
         
         # XGBoost 모델 기반 전략
         'xgb_buy': XGBBuyStrategy,
         
-        # # New Strategies
-        # 'adaptive_vbt': AdaptiveVBTStrategy,
-        # 'volume_weighted_vbt': VolumeWeightedVBTStrategy,
-        # 'mean_reversion_momentum': MeanReversionMomentumStrategy,
-        # 'breakout_confirmation': BreakoutConfirmationStrategy,
+        # === 신규 전략 (2026-02) ===
+        # ADX 모멘텀 필터 전략
+        'adx_momentum': ADXMomentumStrategy,
+        
+        # 볼린저밴드 압축 돌파 전략
+        'bb_squeeze': BBSqueezeStrategy,
+        
+        # MACD 다이버전스 전략
+        'macd_divergence': MACDDivergenceStrategy,
+        
+        # ATR 채널 돌파 전략
+        'atr_channel': ATRChannelStrategy,
+        
+        # VWAP 회귀 전략
+        'vwap_reversion': VWAPReversionStrategy,
     }
 
 

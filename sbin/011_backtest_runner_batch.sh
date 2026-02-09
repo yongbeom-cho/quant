@@ -6,9 +6,9 @@ source ./env.sh
 
 buy_strategy_name="pb_rebound"
 buy_config_idx=1
-sell_config_idx=4
+sell_config_idx=2
 backtest_result_dir="${root_dir}/var/backtest_result"
-parallel=8
+parallel=6
 mkdir -p ${backtest_result_dir}
 
 # Run backtest for each interval
@@ -67,7 +67,6 @@ get_max_position_cnts() {
     esac
 }
 
-parallel=6
 xgb_buy_config_idx=8  # XGB 모델을 사용하는 buy config index
 
 # XGB 모델 학습 및 TS 백테스트 실행
