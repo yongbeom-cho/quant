@@ -48,7 +48,7 @@ def select_best_strategies_from_backtest(
     """
     df = pd.read_csv(csv_path)
     
-    # 1. PnL > 0이고 max_drawdown_pct > 0.5인 것만 필터링
+    # 1. PnL > 0이고 mdd < 50% 인 것만 필터링
     df_positive = df[(df['total_pnl'] > 0) & (df['max_drawdown_pct'] < 50)].copy()
     
     if len(df_positive) == 0:

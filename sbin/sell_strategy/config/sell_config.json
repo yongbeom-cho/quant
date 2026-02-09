@@ -60,13 +60,10 @@
         "description": "단순 비율 청산 전략",
         "sell_signal_config": {
             "low_limit_ratio_list": [
-                0.9,
-                0.875
+                0.9
             ],
             "high_limit_ratio_list": [
-                1.12,
-                1.15,
-                1.18
+                1.12
             ],
             "is_close_lower_list": [
                 false
@@ -97,6 +94,24 @@
             "bailout_no_profit_days_list": [
                 3,
                 4
+            ]
+        }
+    },
+    {
+        "index": 4,
+        "strategy_name": "simple_ratio_sell",
+        "description": "단순 비율 청산 전략",
+        "sell_signal_config": {
+            "low_limit_ratio_list": [
+                0.9,
+                0.875
+            ],
+            "high_limit_ratio_list": [
+                1.15,
+                1.18
+            ],
+            "is_close_lower_list": [
+                false
             ]
         }
     }
