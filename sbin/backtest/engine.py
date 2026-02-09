@@ -235,7 +235,7 @@ class UnifiedBacktestEngine:
                 }
                 
                 signals = ticker_signals[ticker]
-                for indicator_key in ['atr', 'rsi', 'adx', 'ema', 'stoch_k', 'bb_lower', 'bb_upper']:
+                for indicator_key in ['atr', 'rsi', 'adx', 'ema', 'stoch_k', 'bb_lower', 'bb_upper', 'z_score', 'slope', 'ibs', 'rvol', 'ma']:
                     if signals.get(indicator_key) is not None:
                         indicator = signals[indicator_key]
                         if hasattr(indicator, '__len__') and len(indicator) > row_idx:
@@ -398,7 +398,7 @@ class UnifiedBacktestEngine:
             
             # Buy 전략에서 계산한 지표들을 Sell 전략에서도 쓸 수 있게 전달합니다.
             # (예: ATR 기반 트레일링 스탑을 할 때, Buy 단계에서 계산된 ATR을 사용)
-            for indicator_key in ['atr', 'rsi', 'adx', 'ema', 'stoch_k', 'bb_lower', 'bb_upper']:
+            for indicator_key in ['atr', 'rsi', 'adx', 'ema', 'stoch_k', 'bb_lower', 'bb_upper', 'z_score', 'slope', 'ibs', 'rvol', 'ma']:
                 if signals.get(indicator_key) is not None:
                     indicator = signals[indicator_key]
                     if hasattr(indicator, '__len__') and len(indicator) > i:

@@ -20,19 +20,42 @@ def _get_strategy_registry() -> Dict[str, Type[BaseBuyStrategy]]:
     """
     from .vbt_strategy import VBTBuyStrategy
     from .vbt_enhanced_strategy import VBTEnhancedBuyStrategy
-    from .pb_rebound_strategy import PBReboundBuyStrategy
     from .xgb_buy_strategy import XGBBuyStrategy
     
     # VBT Prev Candle 전략
     from .vbt_prev_candle_strategy import VBTPrevCandleStrategy
     
-    # 5개 신규 전략 임포트
+    # ADX 모멘텀 필터 전략
     from .adx_momentum_strategy import ADXMomentumStrategy
+    # 볼린저밴드 압축 돌파 전략
     from .bb_squeeze_strategy import BBSqueezeStrategy
+    # MACD 다이버전스 전략
     from .macd_divergence_strategy import MACDDivergenceStrategy
+    # ATR 채널 돌파 전략
     from .atr_channel_strategy import ATRChannelStrategy
+    # VWAP 회귀 전략
     from .vwap_reversion_strategy import VWAPReversionStrategy
     
+    # (2026-02-09 추가)
+    ###
+    # 선형 회귀 기울기 전략
+    from .linear_regression_slope_strategy import LinearRegressionSlopeBuyStrategy
+    # IBS 마이크로 전략
+    from .ibs_micro_strategy import IBSBuyStrategy
+    # 동적 ATR 전략
+    from .dynamic_atr_strategy import DynamicATRBuyStrategy
+    ###
+    
+    # (2026-02-09 추가 - 새 눌림목 전략)
+    ###
+    # 스토캐스틱 눌림목 전략
+    from .stochastic_pullback_strategy import StochasticPullbackBuyStrategy
+    # OBV 발산 전략
+    from .obv_divergence_strategy import OBVDivergenceBuyStrategy
+    # Williams %R + MFI 전략
+    from .williams_mfi_strategy import WilliamsMFIBuyStrategy
+    ###
+
     return {
         # VBT 전략
         'vbt_with_filters': VBTBuyStrategy,
@@ -61,6 +84,16 @@ def _get_strategy_registry() -> Dict[str, Type[BaseBuyStrategy]]:
         
         # VWAP 회귀 전략
         'vwap_reversion': VWAPReversionStrategy,
+        
+        # === 신규 전략 (2026-02-09) ===
+        'linear_regression_slope': LinearRegressionSlopeBuyStrategy,
+        'ibs_micro': IBSBuyStrategy,
+        'dynamic_atr': DynamicATRBuyStrategy,
+        
+        # === 새 눌림목 전략 (2026-02-09) ===
+        'stochastic_pullback': StochasticPullbackBuyStrategy,
+        'obv_divergence': OBVDivergenceBuyStrategy,
+        'williams_mfi': WilliamsMFIBuyStrategy,
     }
 
 

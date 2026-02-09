@@ -290,5 +290,162 @@
                 10
             ]
         }
+    },
+    {
+        "index": 9,
+        "strategy_name": "linear_regression_slope_exit",
+        "description": "선형 회귀 기울기 + Z-Score 청산 전략",
+        "sell_signal_config": {
+            "slope_exit_threshold_list": [
+                0.0,
+                -0.05,
+                -0.1
+            ],
+            "z_score_exit_threshold_list": [
+                -0.5,
+                0.0,
+                0.5,
+                1.0
+            ],
+            "stop_loss_ratio_list": [
+                0.03,
+                0.05,
+                0.07,
+                0.1
+            ]
+        }
+    },
+    {
+        "index": 10,
+        "strategy_name": "ibs_exit",
+        "description": "IBS 청산 전략 (Tech Rebound + Time-cut) - 비트코인 단기 반등용",
+        "sell_signal_config": {
+            "ibs_exit_threshold_list": [
+                0.6,
+                0.7,
+                0.8,
+                0.9
+            ],
+            "time_cut_period_list": [
+                2,
+                3,
+                5,
+                7
+            ],
+            "stop_loss_ratio_list": [
+                0.02,
+                0.03,
+                0.05
+            ]
+        }
+    },
+    {
+        "index": 11,
+        "strategy_name": "dynamic_atr_exit",
+        "description": "Dynamic ATR 청산 전략 (ATR 기반 TP/SL/Time-cut) - 비트코인 변동성 최적화",
+        "sell_signal_config": {
+            "profit_atr_mult_list": [
+                1.5,
+                2.0,
+                3.0,
+                4.0
+            ],
+            "stop_atr_mult_list": [
+                0.75,
+                1.0,
+                1.5,
+                2.0
+            ],
+            "time_cut_period_list": [
+                3,
+                5,
+                7,
+                10
+            ]
+        }
+    },
+    {
+        "index": 12,
+        "strategy_name": "stochastic_pullback_exit",
+        "description": "Stochastic 과매수 + 데드크로스 청산 전략",
+        "sell_signal_config": {
+            "overbought_threshold_list": [
+                75,
+                80,
+                85
+            ],
+            "exit_on_death_cross_list": [
+                true,
+                false
+            ],
+            "time_cut_period_list": [
+                5,
+                10,
+                15
+            ],
+            "stop_loss_ratio_list": [
+                0.03,
+                0.05,
+                0.07
+            ]
+        }
+    },
+    {
+        "index": 13,
+        "strategy_name": "obv_divergence_exit",
+        "description": "OBV 발산 청산 전략",
+        "sell_signal_config": {
+            "take_profit_ratio_list": [
+                0.05,
+                0.10,
+                0.15
+            ],
+            "stop_loss_ratio_list": [
+                0.03,
+                0.05,
+                0.07
+            ],
+            "time_cut_period_list": [
+                5,
+                10,
+                15
+            ],
+            "exit_on_obv_decline_list": [
+                true,
+                false
+            ]
+        }
+    },
+    {
+        "index": 14,
+        "strategy_name": "williams_mfi_exit",
+        "description": "Williams %R + MFI 과매수 청산 전략",
+        "sell_signal_config": {
+            "willr_overbought_list": [
+                -25,
+                -20,
+                -15
+            ],
+            "mfi_overbought_list": [
+                75,
+                80,
+                85
+            ],
+            "take_profit_ratio_list": [
+                0.05,
+                0.10,
+                0.15
+            ],
+            "stop_loss_ratio_list": [
+                0.03,
+                0.05,
+                0.07
+            ],
+            "time_cut_period_list": [
+                5,
+                10,
+                15
+            ]
+        }
     }
 ]
