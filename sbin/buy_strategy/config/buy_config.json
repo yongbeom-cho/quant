@@ -675,31 +675,26 @@
         "description": "Williams %R + MFI 이중 과매도 전략",
         "buy_signal_config": {
             "willr_period_list": [
-                10,
                 14,
                 21
             ],
             "mfi_period_list": [
-                10,
-                14,
-                21
+                14
             ],
             "willr_oversold_list": [
-                -85,
-                -80,
-                -75
+                -70,
+                -60,
+                -50
             ],
             "mfi_oversold_list": [
-                15,
-                20,
-                25
+                30,
+                40
             ],
             "ema_period_list": [
                 20,
                 50
             ],
             "require_double_oversold_list": [
-                true,
                 false
             ],
             "max_investment_ratio": 1.0
