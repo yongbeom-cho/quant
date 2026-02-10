@@ -5,7 +5,8 @@
 source ./env.sh
 
 buy_strategy_name="pb_rebound"
-buy_config_idx=1
+buy_strategy_name="pb_inrange"
+buy_config_idx=14
 sell_config_idx=2
 backtest_result_dir="${root_dir}/var/backtest_result"
 parallel=6
@@ -13,28 +14,11 @@ mkdir -p ${backtest_result_dir}
 
 # Run backtest for each interval
 for interval in day minute240 minute60; do
-    # # TS (timeseries) backtest
-    # output_file="${backtest_result_dir}/ts_backtest_${interval}_${buy_config_idx}_${sell_config_idx}.csv"
+
+    # TS (timeseries) backtest
+    output_file="${backtest_result_dir}/ts_backtest_${interval}_${buy_config_idx}_${sell_config_idx}.csv"
     
-    # echo "=== Running TS ${interval} Buy 1, Sell 2 Config Combinations ==="
-    # python -u backtest/backtest_runner.py \
-    #     --buy_config buy_strategy/config/buy_config.json --buy_config_idx ${buy_config_idx} \
-    #     --sell_config sell_strategy/config/sell_config.json --sell_config_idx ${sell_config_idx} \
-    #     --root_dir ${root_dir} \
-    #     --market coin --interval ${interval} \
-    #     --parallel --workers ${parallel} \
-    #     --checkpoint_interval ${parallel} \
-    #     --sort_by total_pnl --top_n 20 \
-    #     --is_timeseries_backtest \
-    #     --max_position_cnts 20 \
-    #     --output ${output_file} 2>&1
-    # echo "=== Done ==="
-    # echo ""
-    
-    # Unit backtest
-    output_file="${backtest_result_dir}/unit_backtest_${interval}_${buy_config_idx}_${sell_config_idx}.csv"
-    
-    echo "=== Running ${interval} Buy 1, Sell 4 Config Combinations ==="
+    echo "=== Running TS ${interval} Buy ${buy_config_idx}, Sell ${sell_config_idx} Config Combinations ==="
     python -u backtest/backtest_runner.py \
         --buy_config buy_strategy/config/buy_config.json --buy_config_idx ${buy_config_idx} \
         --sell_config sell_strategy/config/sell_config.json --sell_config_idx ${sell_config_idx} \
@@ -43,7 +27,25 @@ for interval in day minute240 minute60; do
         --parallel --workers ${parallel} \
         --checkpoint_interval ${parallel} \
         --sort_by total_pnl --top_n 20 \
-        --max_position_cnts 25 \
+        --is_timeseries_backtest \
+        --max_position_cnts 100 \
+        --output ${output_file} 2>&1
+    echo "=== Done ==="
+    echo ""
+    
+    # Unit backtest
+    output_file="${backtest_result_dir}/unit_backtest_${interval}_${buy_config_idx}_${sell_config_idx}.csv"
+    
+    echo "=== Running ${interval} Buy ${buy_config_idx}, Sell ${sell_config_idx} Config Combinations ==="
+    python -u backtest/backtest_runner.py \
+        --buy_config buy_strategy/config/buy_config.json --buy_config_idx ${buy_config_idx} \
+        --sell_config sell_strategy/config/sell_config.json --sell_config_idx ${sell_config_idx} \
+        --root_dir ${root_dir} \
+        --market coin --interval ${interval} \
+        --parallel --workers ${parallel} \
+        --checkpoint_interval ${parallel} \
+        --sort_by total_pnl --top_n 20 \
+        --max_position_cnts 3 \
         --output ${output_file} 2>&1
     echo "=== Done ==="
     echo ""
@@ -69,14 +71,13 @@ get_max_position_cnts() {
 
 xgb_buy_config_idx=8  # XGB 모델을 사용하는 buy config index
 
-# XGB 모델 학습 및 TS 백테스트 실행
+XGB 모델 학습 및 TS 백테스트 실행
 echo "=== Starting XGB Model Training and TS Backtest ==="
-# for interval in day minute240 minute60; do
-for interval in minute60; do
+for interval in day minute240 minute60; do
     max_position_cnts=$(get_max_position_cnts ${interval})
     
     # 1. backtest 결과 파일 경로
-    backtest_csv="${backtest_result_dir}/unit_backtest_${interval}_${buy_config_idx}_${sell_config_idx}.csv"
+    backtest_csv="${backtest_result_dir}/ts_backtest_${interval}_${buy_config_idx}_${sell_config_idx}.csv"
     
     # 2. XGB 모델 학습
     model_output_dir="var/${buy_strategy_name}_xgb_model"
@@ -94,6 +95,9 @@ for interval in minute60; do
     echo "=== XGB Training Done for ${interval} ==="
     echo ""
     
+done
+
+for interval in day minute240 minute60; do
     # 3. 학습된 모델을 사용하여 TS 백테스트 실행
     ts_backtest_output="${backtest_result_dir}/ts_backtest_${interval}_xgb_${buy_strategy_name}.csv"
     
@@ -111,6 +115,7 @@ for interval in minute60; do
         --output ${ts_backtest_output} 2>&1
     echo "=== TS XGB Backtest Done for ${interval} ==="
     echo ""
+
 done
 
 echo "=== All XGB Training and TS Backtest Completed ==="

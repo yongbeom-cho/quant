@@ -60,12 +60,10 @@
         "description": "단순 비율 청산 전략",
         "sell_signal_config": {
             "low_limit_ratio_list": [
-                0.9,
                 0.875
             ],
             "high_limit_ratio_list": [
-                1.15,
-                1.18
+                1.15
             ],
             "is_close_lower_list": [
                 false

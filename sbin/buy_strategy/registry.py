@@ -21,6 +21,7 @@ def _get_strategy_registry() -> Dict[str, Type[BaseBuyStrategy]]:
     from .vbt_strategy import VBTBuyStrategy
     from .vbt_enhanced_strategy import VBTEnhancedBuyStrategy
     from .pb_rebound_strategy import PBReboundBuyStrategy
+    from .pb_inrange_strategy import PBInrangeBuyStrategy
     from .xgb_buy_strategy import XGBBuyStrategy
     
     # VBT Prev Candle 전략
@@ -34,6 +35,12 @@ def _get_strategy_registry() -> Dict[str, Type[BaseBuyStrategy]]:
     from .vwap_reversion_strategy import VWAPReversionStrategy
     
     return {
+        # Percent B rebound 전략
+        'pb_rebound': PBReboundBuyStrategy,
+        
+        # Percent B inrange 전략
+        'pb_inrange': PBInrangeBuyStrategy,
+        
         # VBT 전략
         'vbt_with_filters': VBTBuyStrategy,
         

@@ -48,16 +48,17 @@ def select_best_strategies_from_backtest(
     """
     df = pd.read_csv(csv_path)
     
-    # 1. PnL > 0이고 mdd < 50% 인 것만 필터링
-    df_positive = df[(df['total_pnl'] > 0) & (df['max_drawdown_pct'] < 50)].copy()
+    # 1. PnL > 0 것만 필터링
+    df_positive = df[(df['total_pnl'] > 0)].copy()
     
     if len(df_positive) == 0:
         # 조건에 맞는 것이 없으면 전체에서 선택
         df_positive = df.copy()
     
-    # 2. 전체 Top 10 (PnL * mdd) 먼저 계산
-    df_positive['score'] = df_positive['total_pnl'] * (1.0 - df_positive['max_drawdown_pct'] / 100.0)
-    top10_df = df_positive.nlargest(10, 'score')
+    # 2. 전체 Top 10 (PnL * mdd * mdd) 먼저 계산
+    mdd = (1.0 - df_positive['max_drawdown_pct'] / 100.0)
+    df_positive['score'] = df_positive['total_pnl'] * mdd * mdd
+    top10_df = df_positive.nlargest(12, 'score')
     
     # Print top10 rows
     print("=" * 80)
