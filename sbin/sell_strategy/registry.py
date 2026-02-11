@@ -28,6 +28,17 @@ def _get_strategy_registry() -> Dict[str, Type[BaseSellStrategy]]:
     from .chandelier_exit_strategy import ChandelierExitStrategy
     from .vwap_exit_strategy import VWAPExitStrategy
     
+    
+    # === 신규 청산 전략 (2026-02-09 추가) ===
+    from .linear_regression_slope_strategy import LinearRegressionSlopeSellStrategy
+    from .ibs_micro_strategy import IBSSellStrategy
+    from .dynamic_atr_strategy import DynamicATRSellStrategy
+    
+    # === 새 눌림목 청산 전략 (2026-02-09) ===
+    from .stochastic_pullback_strategy import StochasticPullbackSellStrategy
+    from .obv_divergence_strategy import OBVDivergenceSellStrategy
+    from .williams_mfi_strategy import WilliamsMFISellStrategy
+    
     return {
         # VBT 청산 전략
         'bailout_sell': VBTSellStrategy,
@@ -63,6 +74,20 @@ def _get_strategy_registry() -> Dict[str, Type[BaseSellStrategy]]:
         
         # VWAP 목표가 청산 전략
         'vwap_exit': VWAPExitStrategy,
+        
+        # 선형 회귀 기울기 청산 전략
+        'linear_regression_slope_exit': LinearRegressionSlopeSellStrategy,
+        
+        # IBS 마이크로 청산 전략
+        'ibs_exit': IBSSellStrategy,
+        
+        # 동적 ATR 청산 전략
+        'dynamic_atr_exit': DynamicATRSellStrategy,
+        
+        # === 새 눌림목 청산 전략 (2026-02-09) ===
+        'stochastic_pullback_exit': StochasticPullbackSellStrategy,
+        'obv_divergence_exit': OBVDivergenceSellStrategy,
+        'williams_mfi_exit': WilliamsMFISellStrategy,
     }
 
 

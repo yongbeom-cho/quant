@@ -29,7 +29,7 @@ def _run_single_backtest_worker(
     buy_name: str,
     sell_name: str,
     kwargs: Dict[str, Any]
-) -> PerformanceMetrics:
+) -> List[PerformanceMetrics]:
     """
     멀티프로세스용 워커 함수
     
@@ -57,7 +57,7 @@ def _run_single_backtest_worker(
     )
 
 
-def _run_single_backtest_worker_wrapper(args: tuple) -> PerformanceMetrics:
+def _run_single_backtest_worker_wrapper(args: tuple) -> List[PerformanceMetrics]:
     """imap_unordered용 wrapper (단일 튜플 인자를 언패킹)"""
     buy_config, sell_config, buy_name, sell_name, kwargs = args
     return _run_single_backtest_worker(buy_config, sell_config, buy_name, sell_name, kwargs)
@@ -108,7 +108,7 @@ class UnifiedBacktestEngine:
         max_position_cnt: int = 1,
         use_reverse_signal: bool = True,
         is_timeseries_backtest: bool = False
-    ) -> PerformanceMetrics:
+    ) -> List[PerformanceMetrics]:
         """
         단일 전략 조합 백테스트 실행
         
@@ -119,40 +119,67 @@ class UnifiedBacktestEngine:
             use_reverse_signal: 리버스 시그널 사용 여부
             
         Returns:
-            PerformanceMetrics 인스턴스
+            PerformanceMetrics 인스턴스 리스트
+            - 일반 모드: ticker별 PerformanceMetrics 리스트
+            - 타임시리즈 모드: 전체 포트폴리오 기준 PerformanceMetrics 1개 리스트
         """
-        all_trades: List[TradeRecord] = []
-        
         # max_position_cnt가 지정되지 않으면 기본값 1 사용
         if max_position_cnt is None:
             max_position_cnt = 1
         
         if is_timeseries_backtest:
-            return self._run_timeseries_backtest(
-                data, buy_strategy, sell_strategy, max_position_cnt, use_reverse_signal
-            )
+            # 타임시리즈 모드는 전체 자산 기준 한 개의 성과 지표만 사용
+            return [
+                self._run_timeseries_backtest(
+                    data, buy_strategy, sell_strategy, max_position_cnt, use_reverse_signal
+                )
+            ]
         
+        # 일반 모드:
+        # 1) ticker별로 독립적인 PerformanceMetrics 생성
+        # 2) 모든 ticker의 trades를 합산한 전체 PerformanceMetrics도 추가 생성
+        per_ticker_results: List[PerformanceMetrics] = []
+        all_trades: List[TradeRecord] = []
         ticker_mdds: List[float] = []
+
         for ticker, df in data.items():
             ticker_trades, ticker_mdd = self._run_ticker_backtest(
                 ticker, df, buy_strategy, sell_strategy, max_position_cnt, use_reverse_signal
             )
             all_trades.extend(ticker_trades)
             ticker_mdds.append(ticker_mdd)
-        
-        # 모든 ticker의 MDD 중 최소값 (가장 낮은 값 = 최악의 MDD)
-        min_ticker_mdd = min(ticker_mdds) if ticker_mdds else 1.0
-        
-        return PerformanceMetrics.from_trades(
-            trades=all_trades,
-            initial_capital=self.initial_capital,
-            buy_strategy_name=buy_strategy.name,
-            buy_params=buy_strategy.config,
-            sell_strategy_name=sell_strategy.name,
-            sell_params=sell_strategy.config,
-            max_position_cnt=max_position_cnt,
-            mdd=min_ticker_mdd
-        )
+
+            # 각 ticker별 PerformanceMetrics 생성
+            ticker_metrics = PerformanceMetrics.from_trades(
+                trades=ticker_trades,
+                initial_capital=self.initial_capital,
+                buy_strategy_name=buy_strategy.name,
+                buy_params=buy_strategy.config,
+                sell_strategy_name=sell_strategy.name,
+                sell_params=sell_strategy.config,
+                max_position_cnt=max_position_cnt,
+                mdd=ticker_mdd,
+                ticker=ticker
+            )
+            per_ticker_results.append(ticker_metrics)
+
+        # 전체(모든 ticker 합산) PerformanceMetrics 생성
+        if all_trades:
+            overall_mdd = min(ticker_mdds) if ticker_mdds else 1.0
+            overall_metrics = PerformanceMetrics.from_trades(
+                trades=all_trades,
+                initial_capital=self.initial_capital,
+                buy_strategy_name=buy_strategy.name,
+                buy_params=buy_strategy.config,
+                sell_strategy_name=sell_strategy.name,
+                sell_params=sell_strategy.config,
+                max_position_cnt=max_position_cnt,
+                mdd=overall_mdd,
+                ticker=None  # from_trades에서 자동으로 ALL 또는 조합 이름 설정
+            )
+            per_ticker_results.append(overall_metrics)
+
+        return per_ticker_results
 
 
     def _run_timeseries_backtest(
@@ -235,7 +262,7 @@ class UnifiedBacktestEngine:
                 }
                 
                 signals = ticker_signals[ticker]
-                for indicator_key in ['atr', 'rsi', 'adx', 'ema', 'stoch_k', 'bb_lower', 'bb_upper']:
+                for indicator_key in ['atr', 'rsi', 'adx', 'ema', 'stoch_k', 'bb_lower', 'bb_upper', 'z_score', 'slope', 'ibs', 'rvol', 'ma']:
                     if signals.get(indicator_key) is not None:
                         indicator = signals[indicator_key]
                         if hasattr(indicator, '__len__') and len(indicator) > row_idx:
@@ -398,7 +425,7 @@ class UnifiedBacktestEngine:
             
             # Buy 전략에서 계산한 지표들을 Sell 전략에서도 쓸 수 있게 전달합니다.
             # (예: ATR 기반 트레일링 스탑을 할 때, Buy 단계에서 계산된 ATR을 사용)
-            for indicator_key in ['atr', 'rsi', 'adx', 'ema', 'stoch_k', 'bb_lower', 'bb_upper']:
+            for indicator_key in ['atr', 'rsi', 'adx', 'ema', 'stoch_k', 'bb_lower', 'bb_upper', 'z_score', 'slope', 'ibs', 'rvol', 'ma']:
                 if signals.get(indicator_key) is not None:
                     indicator = signals[indicator_key]
                     if hasattr(indicator, '__len__') and len(indicator) > i:
@@ -513,7 +540,7 @@ class UnifiedBacktestEngine:
         Returns:
             모든 조합의 PerformanceMetrics 리스트
         """
-        results = []
+        results: List[PerformanceMetrics] = []
         total = len(buy_strategies) * len(sell_strategies) * len(max_position_cnts)
         count = 0
         
@@ -521,10 +548,11 @@ class UnifiedBacktestEngine:
             for sell_strat in sell_strategies:
                 for max_position_cnt in max_position_cnts:
                     count += 1
-                    result = self.run_single_backtest(
+                    result_list = self.run_single_backtest(
                         data, buy_strat, sell_strat, max_position_cnt, use_reverse_signal, is_timeseries_backtest
                     )
-                    results.append(result)
+                    # ticker별 PerformanceMetrics들을 결과 리스트에 모두 추가
+                    results.extend(result_list)
                     
                     # 진행 상황 출력
                     if count % 10 == 0 or count == total:
@@ -607,8 +635,8 @@ class UnifiedBacktestEngine:
             print(f"Trade history will be saved to: {export_trades_dir}")
         
         # 멀티프로세스 실행
-        results = []
-        pending_results = []  # 저장 대기 중인 결과
+        results: List[PerformanceMetrics] = []
+        pending_results: List[PerformanceMetrics] = []  # 저장 대기 중인 결과
         saved_count = 0  # 저장된 결과 수 추적
         
         # 워커에 전달할 인자들을 생성 (제너레이터로 메모리 절약)
@@ -621,15 +649,17 @@ class UnifiedBacktestEngine:
         
         with Pool(processes=n_workers) as pool:
             # imap_unordered: 결과가 준비되는 대로 즉시 처리 (메모리 효율적)
-            for i, result in enumerate(pool.imap_unordered(
+            for i, result_list in enumerate(pool.imap_unordered(
                 _run_single_backtest_worker_wrapper,
                 generate_worker_args(),
                 chunksize=10  # 한 번에 워커에 전달할 작업 수
             )):
                 if checkpoint_file:
-                    pending_results.append(result)
+                    # 워커에서 반환된 ticker별 PerformanceMetrics들을 모두 대기열에 추가
+                    pending_results.extend(result_list)
                 else:
-                    results.append(result)
+                    # 즉시 메모리 내 결과 리스트에 추가
+                    results.extend(result_list)
                 
                 # 체크포인트 저장 (N개마다 또는 마지막)
                 if checkpoint_file and pending_results:
