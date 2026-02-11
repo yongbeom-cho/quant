@@ -89,6 +89,7 @@ class PerformanceMetrics:
     
     전체 백테스트 결과에 대한 통계 및 성과 지표를 담습니다.
     """
+    ticker: str                         # 종목 코드
     # === 손익 지표 ===
     total_pnl: float                    # 총 손익률 (최종 자산 / 초기 자산 - 1)
     cumulative_return: float            # 누적 수익률 (최종 자산값)
@@ -131,7 +132,8 @@ class PerformanceMetrics:
         sell_strategy_name: str = "",
         sell_params: Optional[Dict[str, Any]] = None,
         max_position_cnt: int = 1,
-        mdd: float = 1.0
+        mdd: float = 1.0,
+        ticker: Optional[str] = None,
     ) -> 'PerformanceMetrics':
         """
         거래 기록에서 성과 지표 계산
@@ -147,8 +149,27 @@ class PerformanceMetrics:
         Returns:
             PerformanceMetrics 인스턴스
         """
+        # 티커 결정: 명시적으로 주어지지 않으면 거래 기록을 기반으로 결정
+        if ticker is None:
+            if trades:
+                tickers = {t.ticker for t in trades}
+                if len(tickers) == 1:
+                    # 단일 티커
+                    resolved_ticker = next(iter(tickers))
+                elif len(tickers) <= 10:
+                    # 10개 이하이면 티커 이름들을 콤마로 조인
+                    resolved_ticker = ",".join(sorted(tickers))
+                else:
+                    # 너무 많으면 ALL
+                    resolved_ticker = "ALL"
+            else:
+                resolved_ticker = "ALL"
+        else:
+            resolved_ticker = ticker
+
         if not trades:
             return cls(
+                ticker=resolved_ticker,
                 total_pnl=0.0,
                 cumulative_return=initial_capital,
                 trade_count=0,
@@ -205,6 +226,7 @@ class PerformanceMetrics:
             sharpe_ratio = 0.0
         
         return cls(
+            ticker=resolved_ticker,
             total_pnl=total_pnl,
             cumulative_return=cum_capital,
             trade_count=trade_count,
@@ -230,6 +252,7 @@ class PerformanceMetrics:
     def to_dict(self) -> Dict[str, Any]:
         """딕셔너리로 변환 (결과 저장/정렬용)"""
         return {
+            'ticker': self.ticker,
             'total_pnl': self.total_pnl,
             'cumulative_return': self.cumulative_return,
             'trade_count': self.trade_count,
@@ -254,7 +277,7 @@ class PerformanceMetrics:
     def summary_string(self) -> str:
         """요약 문자열 반환"""
         return (
-            f"PnL: {self.total_pnl:.4f} | MDD: {self.mdd:.4f} | "
+            f"Ticker: {self.ticker} | PnL: {self.total_pnl:.4f} | MDD: {self.mdd:.4f} | "
             f"Win: {self.win_ratio:.2%} | Trades: {self.trade_count} "
             f"(W:{self.win_count} L:{self.lose_count}) | "
             f"Buy: {self.buy_strategy_name} | Sell: {self.sell_strategy_name} | MaxPos: {self.max_position_cnt}"
@@ -262,7 +285,7 @@ class PerformanceMetrics:
     
     def __repr__(self) -> str:
         return (
-            f"PerformanceMetrics(pnl={self.total_pnl:.2%}, "
+            f"PerformanceMetrics(ticker={self.ticker}, pnl={self.total_pnl:.2%}, "
             f"win_ratio={self.win_ratio:.2%}, mdd={self.mdd:.4f}, "
             f"trades={self.trade_count})"
         )
